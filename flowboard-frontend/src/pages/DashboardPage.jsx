@@ -10,6 +10,7 @@ import { getWorkspaceId, unwrapItems } from "../services/helpers";
 import { useAuth } from "../state/AuthContext";
 
 export default function DashboardPage() {
+  const FREE_WORKSPACE_LIMIT = 3;
   const { token, userId } = useAuth();
   const [workspaces, setWorkspaces] = useState([]);
   const [boardsByWorkspace, setBoardsByWorkspace] = useState({});
@@ -74,7 +75,7 @@ export default function DashboardPage() {
         setSubscriptionStatus(subscription);
       } catch (error) {
         setSubscriptionStatus(null);
-        errors.push(`Subscription: ${error.message}`);
+        console.warn("Subscription status could not be loaded", error);
       }
 
       setMessage(errors.join(" | "));
@@ -136,6 +137,7 @@ export default function DashboardPage() {
 
             if (pendingWorkspace) {
               await persistWorkspace(pendingWorkspace);
+              setWorkspaces((current) => current);
               setMessage("Payment verified and workspace created successfully.");
             } else {
               setWorkspaceModalOpen(true);
@@ -166,11 +168,17 @@ export default function DashboardPage() {
 
   async function createWorkspace(event) {
     event.preventDefault();
+
+    if (requiresWorkspaceUpgrade) {
+      await startWorkspaceUpgrade({ ...workspaceForm });
+      return;
+    }
+
     try {
       await persistWorkspace(workspaceForm);
       setMessage("");
     } catch (error) {
-      if (error.message.includes("Workspace limit reached")) {
+      if (error.message.includes("Workspace limit reached") || error.message.includes("Payment service not available")) {
         await startWorkspaceUpgrade({ ...workspaceForm });
         return;
       }
@@ -203,20 +211,23 @@ export default function DashboardPage() {
     }
   }
 
+  const activeSubscription = subscriptionStatus?.active === true;
+  const ownedWorkspaceCount = workspaces.filter((workspace) => String(workspace.ownerId ?? "") === String(userId)).length;
+  const requiresWorkspaceUpgrade = !activeSubscription && ownedWorkspaceCount >= FREE_WORKSPACE_LIMIT;
   const workspaceActionLabel = paymentLoading
     ? "Opening checkout..."
-    : subscriptionStatus?.active || workspaces.length < 3
-      ? "New workspace"
-      : "Upgrade for more workspaces";
+    : requiresWorkspaceUpgrade
+      ? "Upgrade for more workspaces"
+      : "New workspace";
 
   return (
     <Shell
       title="Workspace Command"
       subtitle="Track your delivery pulse, open boards fast, and orchestrate team movement."
       notificationCount={notificationCount}
-      membershipLabel={subscriptionStatus?.active ? "Premium" : "Collaborator"}
+      membershipLabel={activeSubscription ? "Premium" : "Collaborator"}
       actions={<button className="primary-button" disabled={paymentLoading} onClick={() => {
-        if (!subscriptionStatus?.active && workspaces.length >= 3) {
+        if (requiresWorkspaceUpgrade) {
           startWorkspaceUpgrade();
           return;
         }
@@ -228,10 +239,12 @@ export default function DashboardPage() {
         <MetricCard title="Workspaces" value={workspaces.length} hint="Personal and team spaces" />
         <MetricCard title="Boards" value={Object.values(boardsByWorkspace).flat().length} hint="Across all active workspaces" tone="green" />
         <MetricCard title="Unread Alerts" value={notificationCount} hint="Assignments and reminders" tone="orange" />
-        <MetricCard title="Plan" value={subscriptionStatus?.active ? "Pro" : "Free"} hint={subscriptionStatus?.active ? "Unlimited workspaces unlocked" : "Up to 3 workspaces included"} />
+        <MetricCard title="Plan" value={activeSubscription ? "Premium" : "Free"} hint={activeSubscription ? "Unlimited workspaces unlocked" : `${ownedWorkspaceCount}/${FREE_WORKSPACE_LIMIT} owned workspaces used`} />
       </section>
 
       {message ? <div className="feedback-banner">{message}</div> : null}
+      {activeSubscription ? <div className="feedback-banner">Premium is active on this account. You can create unlimited workspaces now.</div> : null}
+      {requiresWorkspaceUpgrade ? <div className="feedback-banner">Free plan allows 3 owned workspaces. Upgrade to Premium to create more.</div> : null}
 
       <div className="dashboard-grid">
         <div className="dashboard-main" id="boards">
@@ -304,7 +317,7 @@ export default function DashboardPage() {
 
       <Modal open={workspaceModalOpen} title="Create workspace" onClose={() => setWorkspaceModalOpen(false)}>
         <form className="form-grid" onSubmit={createWorkspace}>
-          {!subscriptionStatus?.active && workspaces.length >= 3 ? <p className="auth-note">Free plan is capped at 3 workspaces. The next step will open Razorpay checkout before this workspace is created.</p> : null}
+          {requiresWorkspaceUpgrade ? <p className="auth-note">Free plan is capped at 3 owned workspaces. The next step will open Razorpay checkout before this workspace is created.</p> : null}
           <label>
             Workspace name
             <input value={workspaceForm.name} onChange={(event) => setWorkspaceForm((current) => ({ ...current, name: event.target.value }))} />

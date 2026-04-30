@@ -43,6 +43,14 @@ function formatAuthError(message) {
     return "Send the signup OTP first, then enter it here to complete registration.";
   }
 
+  if (message.includes("SMTP authentication failed")) {
+    return "OTP email could not be delivered because the mail server login is not configured correctly yet.";
+  }
+
+  if (message.includes("Unable to send email")) {
+    return "OTP email could not be delivered because the email provider is not configured correctly yet.";
+  }
+
   if (message.includes("disabled") || message.includes("Bad credentials")) {
     return "Email or password is incorrect. Create the account first, then log in with the same password.";
   }
@@ -188,12 +196,8 @@ export default function AuthPage() {
     setLoading(true);
     setFeedbackMessage("", "");
     try {
-      const response = await authApi.sendSignupOtp(signupForm.email.trim());
-      const otpText = typeof response === "object" && response?.otp ? ` OTP: ${response.otp}` : "";
-      setFeedbackMessage("success", `Signup OTP sent.${otpText} Enter it below to finish creating your account.`);
-      if (typeof response === "object" && response?.otp) {
-        setSignupForm((current) => ({ ...current, otp: response.otp }));
-      }
+      await authApi.sendSignupOtp(signupForm.email.trim());
+      setFeedbackMessage("success", "Signup OTP sent to your email. Enter it below to finish creating your account.");
     } catch (error) {
       setFeedbackMessage("error", formatAuthError(error.message));
     } finally {
@@ -254,12 +258,8 @@ export default function AuthPage() {
     setLoading(true);
     setFeedbackMessage("", "");
     try {
-      const response = await authApi.sendOtp(resetForm.email.trim());
-      const otpText = typeof response === "object" && response?.otp ? ` OTP: ${response.otp}` : "";
-      setFeedbackMessage("success", `OTP is ready.${otpText} Enter the OTP and your new password below.`);
-      if (typeof response === "object" && response?.otp) {
-        setResetForm((current) => ({ ...current, otp: response.otp }));
-      }
+      await authApi.sendOtp(resetForm.email.trim());
+      setFeedbackMessage("success", "Password reset OTP sent to your email. Enter it below with your new password.");
     } catch (error) {
       setFeedbackMessage("error", formatAuthError(error.message));
     } finally {
@@ -416,7 +416,7 @@ export default function AuthPage() {
                   placeholder="NewPassword@1"
                 />
               </label>
-              <p className="auth-note">Use Send OTP first. In local development, the OTP will also be shown on this page if email delivery is not working.</p>
+              <p className="auth-note">Use Send OTP first. The OTP will be delivered to the registered email address.</p>
               <button className="primary-button auth-submit" disabled={loading}>{loading ? "Updating password..." : "Reset Password"}</button>
             </form>
           </div>
