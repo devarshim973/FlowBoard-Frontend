@@ -25,6 +25,7 @@ const initialReset = {
 
 const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const revealOtpInDev = import.meta.env.DEV;
 
 function formatAuthError(message) {
   if (!message) {
@@ -94,10 +95,6 @@ export default function AuthPage() {
 
     if (!loginForm.password) {
       return "Password is required.";
-    }
-
-    if (!passwordPattern.test(loginForm.password)) {
-      return "Password must contain uppercase, lowercase, number, special character, and be at least 8 characters.";
     }
 
     return "";
@@ -196,8 +193,18 @@ export default function AuthPage() {
     setLoading(true);
     setFeedbackMessage("", "");
     try {
-      await authApi.sendSignupOtp(signupForm.email.trim());
-      setFeedbackMessage("success", "Signup OTP sent to your email. Enter it below to finish creating your account.");
+      const response = await authApi.sendSignupOtp(signupForm.email.trim());
+      const signupOtp = response?.otp ? String(response.otp).trim() : "";
+      if (signupOtp) {
+        setSignupForm((current) => ({ ...current, otp: signupOtp }));
+      }
+
+      setFeedbackMessage(
+        "success",
+        signupOtp && revealOtpInDev
+          ? `Signup OTP generated for local testing. Use OTP: ${signupOtp}`
+          : "Signup OTP sent to your email. Enter it below to finish creating your account."
+      );
     } catch (error) {
       setFeedbackMessage("error", formatAuthError(error.message));
     } finally {
@@ -258,8 +265,18 @@ export default function AuthPage() {
     setLoading(true);
     setFeedbackMessage("", "");
     try {
-      await authApi.sendOtp(resetForm.email.trim());
-      setFeedbackMessage("success", "Password reset OTP sent to your email. Enter it below with your new password.");
+      const response = await authApi.sendOtp(resetForm.email.trim());
+      const resetOtp = response?.otp ? String(response.otp).trim() : "";
+      if (resetOtp) {
+        setResetForm((current) => ({ ...current, otp: resetOtp }));
+      }
+
+      setFeedbackMessage(
+        "success",
+        resetOtp && revealOtpInDev
+          ? `Password reset OTP generated for local testing. Use OTP: ${resetOtp}`
+          : "Password reset OTP sent to your email. Enter it below with your new password."
+      );
     } catch (error) {
       setFeedbackMessage("error", formatAuthError(error.message));
     } finally {
