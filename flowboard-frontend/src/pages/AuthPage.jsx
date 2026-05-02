@@ -25,7 +25,6 @@ const initialReset = {
 
 const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const revealOtpInDev = import.meta.env.DEV;
 
 function formatAuthError(message) {
   if (!message) {
@@ -45,7 +44,15 @@ function formatAuthError(message) {
   }
 
   if (message.includes("SMTP authentication failed")) {
-    return "OTP email could not be delivered because the mail server login is not configured correctly yet.";
+    return "OTP email could not be delivered because SMTP_USERNAME or SMTP_APP_PASSWORD is wrong.";
+  }
+
+  if (message.includes("SMTP email is not configured")) {
+    return "OTP email could not be delivered because SMTP_USERNAME, SMTP_APP_PASSWORD, or SMTP_FROM_EMAIL is missing in auth-service.";
+  }
+
+  if (message.includes("Unable to send email via SMTP")) {
+    return "OTP email could not be delivered. Check Gmail SMTP settings and the generated app password.";
   }
 
   if (message.includes("Unable to send email")) {
@@ -193,18 +200,8 @@ export default function AuthPage() {
     setLoading(true);
     setFeedbackMessage("", "");
     try {
-      const response = await authApi.sendSignupOtp(signupForm.email.trim());
-      const signupOtp = response?.otp ? String(response.otp).trim() : "";
-      if (signupOtp) {
-        setSignupForm((current) => ({ ...current, otp: signupOtp }));
-      }
-
-      setFeedbackMessage(
-        "success",
-        signupOtp && revealOtpInDev
-          ? `Signup OTP generated for local testing. Use OTP: ${signupOtp}`
-          : "Signup OTP sent to your email. Enter it below to finish creating your account."
-      );
+      await authApi.sendSignupOtp(signupForm.email.trim());
+      setFeedbackMessage("success", "Signup OTP sent to your email. Enter it below to finish creating your account.");
     } catch (error) {
       setFeedbackMessage("error", formatAuthError(error.message));
     } finally {
@@ -265,18 +262,8 @@ export default function AuthPage() {
     setLoading(true);
     setFeedbackMessage("", "");
     try {
-      const response = await authApi.sendOtp(resetForm.email.trim());
-      const resetOtp = response?.otp ? String(response.otp).trim() : "";
-      if (resetOtp) {
-        setResetForm((current) => ({ ...current, otp: resetOtp }));
-      }
-
-      setFeedbackMessage(
-        "success",
-        resetOtp && revealOtpInDev
-          ? `Password reset OTP generated for local testing. Use OTP: ${resetOtp}`
-          : "Password reset OTP sent to your email. Enter it below with your new password."
-      );
+      await authApi.sendOtp(resetForm.email.trim());
+      setFeedbackMessage("success", "Password reset OTP sent to your email. Enter it below with your new password.");
     } catch (error) {
       setFeedbackMessage("error", formatAuthError(error.message));
     } finally {
