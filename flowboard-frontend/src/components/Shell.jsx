@@ -1,12 +1,26 @@
+import { useEffect, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 
 export default function Shell({ children, title, subtitle, actions, notificationCount = 0, membershipLabel = "Collaborator" }) {
   const { logout, profile } = useAuth();
   const navigate = useNavigate();
+  const [theme, setTheme] = useState("light");
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    setTheme(document.documentElement.getAttribute("data-theme") || "light");
+  }, []);
 
   function goToSection(hash) {
     navigate(`/app${hash}`);
+  }
+
+  function toggleTheme() {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", nextTheme);
+    window.localStorage.setItem("flowboard-theme", nextTheme);
+    setTheme(nextTheme);
   }
 
   return (
@@ -54,6 +68,9 @@ export default function Shell({ children, title, subtitle, actions, notification
           </div>
 
           <div className="topbar-actions">
+            <button type="button" className="theme-toggle app-theme-toggle" onClick={toggleTheme}>
+              {theme === "dark" ? "Light mode" : "Dark mode"}
+            </button>
             {actions}
             <div className="notification-chip">
               <span>Alerts</span>

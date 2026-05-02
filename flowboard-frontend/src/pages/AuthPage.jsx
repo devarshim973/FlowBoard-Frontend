@@ -1,6 +1,5 @@
-import { useMemo, useState } from "react";
-import { Navigate } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Navigate, useNavigate } from "react-router-dom";
 import { authApi, userApi } from "../services/api";
 import { decodeJwt } from "../services/helpers";
 import { useAuth } from "../state/AuthContext";
@@ -17,14 +16,9 @@ const initialLogin = {
   password: ""
 };
 
-const initialReset = {
-  email: "",
-  otp: "",
-  newPassword: ""
-};
-
 const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const THEME_STORAGE_KEY = "flowboard-theme";
 
 function formatAuthError(message) {
   if (!message) {
@@ -36,7 +30,7 @@ function formatAuthError(message) {
   }
 
   if (message.includes("User already exist")) {
-    return "This email is already registered. Try logging in or use OTP Reset.";
+    return "This email is already registered. Try logging in instead.";
   }
 
   if (message.includes("Signup OTP is required")) {
@@ -66,20 +60,37 @@ function formatAuthError(message) {
   return message;
 }
 
+function getInitialTheme() {
+  if (typeof window === "undefined") {
+    return "light";
+  }
+
+  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+  if (storedTheme === "light" || storedTheme === "dark") {
+    return storedTheme;
+  }
+
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
 export default function AuthPage() {
   const [mode, setMode] = useState("login");
+  const [theme, setTheme] = useState(getInitialTheme);
   const [signupForm, setSignupForm] = useState(initialSignup);
   const [loginForm, setLoginForm] = useState(initialLogin);
-  const [resetForm, setResetForm] = useState(initialReset);
   const [feedback, setFeedback] = useState({ type: "", text: "" });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { isAuthenticated, login } = useAuth();
 
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
   const activeTitle = useMemo(() => {
-    if (mode === "signup") return "Create your account";
-    if (mode === "reset") return "Reset your password";
-    return "Login to continue";
+    if (mode === "signup") return "Create an account that feels ready on day one";
+    return "Sign in and continue building with your team";
   }, [mode]);
 
   function setFeedbackMessage(type, text) {
@@ -89,6 +100,10 @@ export default function AuthPage() {
   function switchMode(nextMode) {
     setMode(nextMode);
     setFeedbackMessage("", "");
+  }
+
+  function toggleTheme() {
+    setTheme((currentTheme) => (currentTheme === "light" ? "dark" : "light"));
   }
 
   function validateLoginForm() {
@@ -135,26 +150,6 @@ export default function AuthPage() {
     return "";
   }
 
-  function validateResetForm(requireOtp) {
-    if (!emailPattern.test(resetForm.email.trim())) {
-      return "Enter the registered email address.";
-    }
-
-    if (!requireOtp) {
-      return "";
-    }
-
-    if (resetForm.otp.trim().length !== 6) {
-      return "OTP must be 6 characters.";
-    }
-
-    if (!passwordPattern.test(resetForm.newPassword)) {
-      return "New password must contain uppercase, lowercase, number, special character, and be at least 8 characters.";
-    }
-
-    return "";
-  }
-
   async function handleSignup(event) {
     event.preventDefault();
     const validationMessage = validateSignupForm();
@@ -181,7 +176,7 @@ export default function AuthPage() {
         password: payload.password
       });
       setMode("login");
-      setFeedbackMessage("success", "Account created successfully. Now click Login to enter FlowBoard.");
+      setFeedbackMessage("success", "Account created successfully. Now sign in to enter FlowBoard.");
     } catch (error) {
       setFeedbackMessage("error", formatAuthError(error.message));
     } finally {
@@ -233,65 +228,14 @@ export default function AuthPage() {
         throw new Error("Login succeeded but no user id was found in the token.");
       }
 
-      if (userId) {
-        try {
-          profile = await userApi.getById(userId, token, userId);
-        } catch {
-          profile = { fullName: loginForm.email.trim(), email: loginForm.email.trim() };
-        }
+      try {
+        profile = await userApi.getById(userId, token, userId);
+      } catch {
+        profile = { fullName: loginForm.email.trim(), email: loginForm.email.trim() };
       }
 
       login({ token, userId, profile });
       navigate("/app");
-    } catch (error) {
-      setFeedbackMessage("error", formatAuthError(error.message));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleSendOtp(event) {
-    event.preventDefault();
-    const validationMessage = validateResetForm(false);
-
-    if (validationMessage) {
-      setFeedbackMessage("error", validationMessage);
-      return;
-    }
-
-    setLoading(true);
-    setFeedbackMessage("", "");
-    try {
-      await authApi.sendOtp(resetForm.email.trim());
-      setFeedbackMessage("success", "Password reset OTP sent to your email. Enter it below with your new password.");
-    } catch (error) {
-      setFeedbackMessage("error", formatAuthError(error.message));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleResetPassword(event) {
-    event.preventDefault();
-    const validationMessage = validateResetForm(true);
-
-    if (validationMessage) {
-      setFeedbackMessage("error", validationMessage);
-      return;
-    }
-
-    setLoading(true);
-    setFeedbackMessage("", "");
-    try {
-      await authApi.resetPassword({
-        email: resetForm.email.trim(),
-        otp: resetForm.otp.trim(),
-        newPassword: resetForm.newPassword
-      });
-      setResetForm(initialReset);
-      setLoginForm((current) => ({ ...current, email: resetForm.email.trim(), password: "" }));
-      setFeedbackMessage("success", "Password updated. You can log in now with the new password.");
-      setMode("login");
     } catch (error) {
       setFeedbackMessage("error", formatAuthError(error.message));
     } finally {
@@ -304,32 +248,66 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="auth-page simple-auth-page">
-      <div className="auth-panel form-panel auth-card">
-        <div className="auth-header">
-          <div className="brand auth-brand">
+    <div className="auth-page auth-stage">
+      <section className="auth-showcase panel auth-showcase-panel">
+        <div className="auth-showcase-top">
+          <div className="brand auth-brand auth-brand-large">
             <span className="brand-mark">F</span>
             <div>
               <strong>FlowBoard</strong>
-              <p>{activeTitle}</p>
+              <p>Organize boards, lists, cards, and team momentum from one place.</p>
             </div>
           </div>
+          <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label="Toggle light and dark theme">
+            <span>{theme === "light" ? "Dark" : "Light"} mode</span>
+          </button>
         </div>
 
-        <div className="tab-row">
+        <div className="auth-showcase-copy">
+          <p className="eyebrow">Project Focus</p>
+          <h1>Workflows that stay clear even when the project gets messy.</h1>
+          <p className="landing-copy auth-copy">
+            Move from signup to shipping with a cleaner auth screen, stronger visual hierarchy, and a theme switch that feels built in instead of added later.
+          </p>
+        </div>
+
+        <div className="auth-feature-grid">
+          <article className="auth-feature-card">
+            <span className="auth-feature-kicker">Boards</span>
+            <h3>Plan work visually</h3>
+            <p>Track priorities, ownership, and status without losing the bigger picture.</p>
+          </article>
+          <article className="auth-feature-card">
+            <span className="auth-feature-kicker">Teams</span>
+            <h3>Keep collaboration calm</h3>
+            <p>Give everyone one place to check progress, updates, and what needs attention next.</p>
+          </article>
+          <article className="auth-feature-card accent-card">
+            <span className="auth-feature-kicker">Theme</span>
+            <h3>{theme === "light" ? "Warm light mode" : "Focused dark mode"}</h3>
+            <p>Switch the atmosphere instantly without leaving the page or resetting the form.</p>
+          </article>
+        </div>
+      </section>
+
+      <section className="auth-panel form-panel auth-card auth-card-modern">
+        <div className="auth-header auth-header-modern">
+          <p className="eyebrow">Welcome Back</p>
+          <h2>{mode === "signup" ? "Create your FlowBoard account" : "Login to your workspace"}</h2>
+          <p className="auth-subtitle">{activeTitle}</p>
+        </div>
+
+        <div className="tab-row auth-tab-row">
           <button type="button" className={mode === "login" ? "tab active" : "tab"} onClick={() => switchMode("login")}>
             Login
           </button>
           <button type="button" className={mode === "signup" ? "tab active" : "tab"} onClick={() => switchMode("signup")}>
             Signup
           </button>
-          <button type="button" className={mode === "reset" ? "tab active" : "tab"} onClick={() => switchMode("reset")}>
-            OTP Reset
-          </button>
         </div>
 
         {mode === "login" ? (
-          <form className="form-grid" onSubmit={handleLogin}>
+          <form className="form-grid auth-form-grid" onSubmit={handleLogin}>
             <label>
               Email
               <input
@@ -348,19 +326,11 @@ export default function AuthPage() {
                 placeholder="Password@1"
               />
             </label>
-            <div className="auth-inline-actions">
-              <p className="auth-note">Login requires the same strong password format enforced by the backend.</p>
-              <button type="button" className="link-button" onClick={() => {
-                setResetForm((current) => ({ ...current, email: loginForm.email.trim() }));
-                switchMode("reset");
-              }}>
-                Forgot password?
-              </button>
-            </div>
+            <p className="auth-note auth-note-soft">Use the same password format enforced by the backend so login and signup stay consistent.</p>
             <button className="primary-button auth-submit" disabled={loading}>{loading ? "Signing in..." : "Login"}</button>
           </form>
-        ) : mode === "signup" ? (
-          <form className="form-grid" onSubmit={handleSignup}>
+        ) : (
+          <form className="form-grid auth-form-grid" onSubmit={handleSignup}>
             <label>
               Full Name
               <input value={signupForm.fullName} onChange={(event) => setSignupForm((current) => ({ ...current, fullName: event.target.value }))} placeholder="Devar Sharma" />
@@ -369,9 +339,9 @@ export default function AuthPage() {
               Email
               <input value={signupForm.email} onChange={(event) => setSignupForm((current) => ({ ...current, email: event.target.value }))} placeholder="you@example.com" />
             </label>
-            <div className="auth-inline-actions">
-              <p className="auth-note">Verify the email with OTP before the account can be created.</p>
-              <button type="button" className="link-button" onClick={handleSendSignupOtp} disabled={loading}>
+            <div className="otp-request-row">
+              <p className="auth-note auth-note-soft">Send the OTP first, then enter it below to finish creating the account.</p>
+              <button type="button" className="secondary-button otp-button" onClick={handleSendSignupOtp} disabled={loading}>
                 {loading ? "Sending OTP..." : "Send Signup OTP"}
               </button>
             </div>
@@ -383,51 +353,13 @@ export default function AuthPage() {
               Signup OTP
               <input value={signupForm.otp} onChange={(event) => setSignupForm((current) => ({ ...current, otp: event.target.value }))} placeholder="6 character OTP" />
             </label>
-            <p className="auth-note">Use Send Signup OTP first. After verification, this form will create the account and you can log in immediately.</p>
-            <p className="auth-note">Use a password like `Password@1`. It must include uppercase, lowercase, number, special character, and minimum 8 characters.</p>
+            <p className="auth-note auth-note-soft">Password must include uppercase, lowercase, number, special character, and at least 8 characters.</p>
             <button className="primary-button auth-submit" disabled={loading}>{loading ? "Creating account..." : "Create account"}</button>
           </form>
-        ) : (
-          <div className="form-grid">
-            <form className="form-grid" onSubmit={handleSendOtp}>
-              <label>
-                Registered Email
-                <input
-                  type="email"
-                  value={resetForm.email}
-                  onChange={(event) => setResetForm((current) => ({ ...current, email: event.target.value }))}
-                  placeholder="you@example.com"
-                />
-              </label>
-              <button className="secondary-button auth-submit" disabled={loading}>{loading ? "Sending OTP..." : "Send OTP"}</button>
-            </form>
-
-            <form className="form-grid" onSubmit={handleResetPassword}>
-              <label>
-                OTP
-                <input
-                  value={resetForm.otp}
-                  onChange={(event) => setResetForm((current) => ({ ...current, otp: event.target.value }))}
-                  placeholder="6 character OTP"
-                />
-              </label>
-              <label>
-                New Password
-                <input
-                  type="password"
-                  value={resetForm.newPassword}
-                  onChange={(event) => setResetForm((current) => ({ ...current, newPassword: event.target.value }))}
-                  placeholder="NewPassword@1"
-                />
-              </label>
-              <p className="auth-note">Use Send OTP first. The OTP will be delivered to the registered email address.</p>
-              <button className="primary-button auth-submit" disabled={loading}>{loading ? "Updating password..." : "Reset Password"}</button>
-            </form>
-          </div>
         )}
 
         {feedback.text ? <p className={`feedback ${feedback.type === "success" ? "feedback-success" : "feedback-error"}`}>{feedback.text}</p> : null}
-      </div>
+      </section>
     </div>
   );
 }
