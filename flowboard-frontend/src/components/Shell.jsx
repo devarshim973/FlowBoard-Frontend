@@ -3,7 +3,7 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 
 export default function Shell({ children, title, subtitle, actions, notificationCount = 0, membershipLabel = "Collaborator" }) {
-  const { logout, profile } = useAuth();
+  const { logout, profile, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [theme, setTheme] = useState("light");
 
@@ -38,6 +38,11 @@ export default function Shell({ children, title, subtitle, actions, notification
           <NavLink to="/app" end className="nav-pill">
             Dashboard
           </NavLink>
+          {isAdmin ? (
+            <NavLink to="/app/admin" className="nav-pill">
+              Admin
+            </NavLink>
+          ) : null}
           <button type="button" className="nav-pill" onClick={() => goToSection("#boards")}>
             Boards
           </button>

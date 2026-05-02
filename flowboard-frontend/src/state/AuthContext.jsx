@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { isTokenActive } from "../services/helpers";
+import { decodeJwt, isTokenActive } from "../services/helpers";
 
 const AuthContext = createContext(null);
 
@@ -11,6 +11,7 @@ export function AuthProvider({ children }) {
     const emptyAuth = {
       token: "",
       userId: "",
+      role: "",
       profile: null
     };
 
@@ -25,7 +26,10 @@ export function AuthProvider({ children }) {
         return emptyAuth;
       }
 
-      return parsed;
+      return {
+        ...parsed,
+        role: parsed.role || decodeJwt(parsed.token).role || ""
+      };
     } catch {
       return emptyAuth;
     }
@@ -33,7 +37,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (auth.token && !isTokenActive(auth.token)) {
-      setAuth({ token: "", userId: "", profile: null });
+      setAuth({ token: "", userId: "", role: "", profile: null });
       return;
     }
 
@@ -44,13 +48,18 @@ export function AuthProvider({ children }) {
     () => ({
       token: auth.token,
       userId: auth.userId,
+      role: auth.role,
       profile: auth.profile,
       isAuthenticated: Boolean(auth.token && auth.userId),
+      isAdmin: auth.role === "PLATFORM_ADMIN",
       login(nextAuth) {
-        setAuth(nextAuth);
+        setAuth({
+          ...nextAuth,
+          role: nextAuth.role || decodeJwt(nextAuth.token).role || ""
+        });
       },
       logout() {
-        setAuth({ token: "", userId: "", profile: null });
+        setAuth({ token: "", userId: "", role: "", profile: null });
       },
       setProfile(profile) {
         setAuth((current) => ({ ...current, profile }));

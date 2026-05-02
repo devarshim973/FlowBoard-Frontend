@@ -234,8 +234,8 @@ export default function AuthPage() {
         profile = { fullName: loginForm.email.trim(), email: loginForm.email.trim() };
       }
 
-      login({ token, userId, profile });
-      navigate("/app");
+      login({ token, userId, role: payload.role || "", profile });
+      navigate(payload.role === "PLATFORM_ADMIN" ? "/app/admin" : "/app");
     } catch (error) {
       setFeedbackMessage("error", formatAuthError(error.message));
     } finally {

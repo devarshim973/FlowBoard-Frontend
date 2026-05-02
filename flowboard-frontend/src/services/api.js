@@ -1,3 +1,5 @@
+import { decodeJwt } from "./helpers";
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 function extractErrorMessage(body) {
@@ -33,9 +35,10 @@ async function parseResponse(response) {
 }
 
 export async function apiRequest(path, options = {}) {
-  const { token, userId, headers = {}, body, query } = options;
+  const { token, userId, role, headers = {}, body, query } = options;
   const requestUrl = API_BASE_URL ? `${API_BASE_URL}${path}` : path;
   const url = new URL(requestUrl, window.location.origin);
+  const resolvedRole = role || (token ? decodeJwt(token).role : "");
 
   if (query) {
     Object.entries(query).forEach(([key, value]) => {
@@ -49,6 +52,7 @@ export async function apiRequest(path, options = {}) {
     ...(body instanceof FormData ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(userId ? { "X-User-Id": String(userId) } : {}),
+    ...(resolvedRole ? { "X-User-Role": resolvedRole } : {}),
     ...headers
   };
 
@@ -107,6 +111,33 @@ export const paymentApi = {
 export const userApi = {
   getById(targetUserId, token, userId) {
     return apiRequest(`/api/v1/user/id/${targetUserId}`, { token, userId });
+  }
+};
+
+export const adminApi = {
+  getUsers(token, userId) {
+    return apiRequest("/api/v1/admin/user/all", { token, userId });
+  },
+  deleteUser(targetUserId, token, userId) {
+    return apiRequest(`/api/v1/admin/${targetUserId}`, { method: "DELETE", token, userId });
+  },
+  disableUser(targetUserId, token, userId) {
+    return apiRequest(`/api/v1/admin/disable/${targetUserId}`, { method: "PUT", token, userId });
+  },
+  enableUser(targetUserId, token, userId) {
+    return apiRequest(`/api/v1/admin/enable/${targetUserId}`, { method: "PUT", token, userId });
+  },
+  getWorkspaces(token, userId) {
+    return apiRequest("/api/v1/admin/workspaces", { token, userId });
+  },
+  deleteWorkspace(workspaceId, token, userId) {
+    return apiRequest(`/api/v1/admin/workspaces/${workspaceId}`, { method: "DELETE", token, userId });
+  },
+  getBoards(token, userId) {
+    return apiRequest("/api/v1/admin/boards", { token, userId });
+  },
+  deleteBoard(boardId, token, userId) {
+    return apiRequest(`/api/v1/admin/boards/${boardId}`, { method: "DELETE", token, userId });
   }
 };
 

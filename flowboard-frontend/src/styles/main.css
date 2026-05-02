@@ -847,6 +847,35 @@ textarea {
   gap: 0.8rem;
 }
 
+.admin-table {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.admin-table-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) minmax(160px, 1.6fr) minmax(90px, 0.8fr) minmax(90px, 0.8fr) minmax(160px, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.9rem 1rem;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
+  border: 1px solid var(--border);
+}
+
+.admin-table-head {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.admin-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .notification-row,
 .timeline-row,
 .task-card,
@@ -1075,6 +1104,14 @@ textarea {
     width: 100%;
     max-height: 92vh;
     padding: 1rem;
+  }
+
+  .admin-table-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-actions {
+    justify-content: flex-start;
   }
 
   .auth-card-modern,
