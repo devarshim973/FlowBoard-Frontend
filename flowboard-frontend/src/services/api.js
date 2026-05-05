@@ -115,6 +115,9 @@ export const userApi = {
 };
 
 export const adminApi = {
+  login(payload) {
+    return apiRequest("/api/v1/admin/login", { method: "POST", body: payload });
+  },
   getUsers(token, userId) {
     return apiRequest("/api/v1/admin/user/all", { token, userId });
   },
@@ -227,3 +230,4 @@ export const notificationApi = {
     return apiRequest(`/api/v1/notifications/readAll/${recipientId}`, { method: "PUT", token, userId });
   }
 };
+

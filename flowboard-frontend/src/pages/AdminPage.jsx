@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import Shell from "../components/Shell";
 import { adminApi } from "../services/api";
 import { formatDate, unwrapItems } from "../services/helpers";
@@ -17,21 +18,38 @@ export default function AdminPage() {
       if (!token || !userId) return;
 
       setLoading(true);
-      const errors = [];
+      setMessage("");
 
       try {
-        const [usersResult, workspacesResult, boardsResult] = await Promise.all([
+        const [usersResult, workspacesResult, boardsResult] = await Promise.allSettled([
           adminApi.getUsers(token, userId),
           adminApi.getWorkspaces(token, userId),
           adminApi.getBoards(token, userId)
         ]);
 
-        setUsers(unwrapItems(usersResult));
-        setWorkspaces(unwrapItems(workspacesResult));
-        setBoards(unwrapItems(boardsResult));
-        setMessage("");
-      } catch (error) {
-        errors.push(error.message);
+        const errors = [];
+
+        if (usersResult.status === "fulfilled") {
+          setUsers(unwrapItems(usersResult.value));
+        } else {
+          setUsers([]);
+          errors.push(`Users: ${usersResult.reason.message}`);
+        }
+
+        if (workspacesResult.status === "fulfilled") {
+          setWorkspaces(unwrapItems(workspacesResult.value));
+        } else {
+          setWorkspaces([]);
+          errors.push(`Workspaces: ${workspacesResult.reason.message}`);
+        }
+
+        if (boardsResult.status === "fulfilled") {
+          setBoards(unwrapItems(boardsResult.value));
+        } else {
+          setBoards([]);
+          errors.push(`Boards: ${boardsResult.reason.message}`);
+        }
+
         setMessage(errors.join(" | "));
       } finally {
         setLoading(false);
@@ -97,6 +115,16 @@ export default function AdminPage() {
       membershipLabel="Platform Admin"
       actions={<button type="button" className="primary-button" onClick={() => window.location.reload()}>Refresh admin data</button>}
     >
+      <div className="panel" style={{ marginBottom: 24 }}>
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Admin Login</p>
+            <h3>Dedicated admin entry</h3>
+          </div>
+          <Link className="secondary-button" to="/admin/login">Open admin login</Link>
+        </div>
+      </div>
+
       <section className="metrics-grid">
         {stats.map((item) => (
           <article key={item.title} className="metric-card tone-cyan">

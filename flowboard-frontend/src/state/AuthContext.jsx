@@ -50,8 +50,8 @@ export function AuthProvider({ children }) {
       userId: auth.userId,
       role: auth.role,
       profile: auth.profile,
-      isAuthenticated: Boolean(auth.token && auth.userId),
-      isAdmin: auth.role === "PLATFORM_ADMIN",
+      isAuthenticated: Boolean(auth.token && auth.userId !== "" && auth.userId !== null && auth.userId !== undefined),
+      isAdmin: auth.role === "PLATFORM_ADMIN" || auth.role === "ADMIN",
       login(nextAuth) {
         setAuth({
           ...nextAuth,
@@ -74,3 +74,4 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   return useContext(AuthContext);
 }
+

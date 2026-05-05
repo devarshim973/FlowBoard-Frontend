@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
-import { authApi, userApi } from "../services/api";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+import { adminApi, authApi, userApi } from "../services/api";
 import { decodeJwt } from "../services/helpers";
 import { useAuth } from "../state/AuthContext";
 
@@ -73,7 +73,7 @@ function getInitialTheme() {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-export default function AuthPage() {
+export default function AuthPage({ adminMode = false }) {
   const [mode, setMode] = useState("login");
   const [theme, setTheme] = useState(getInitialTheme);
   const [signupForm, setSignupForm] = useState(initialSignup);
@@ -81,7 +81,7 @@ export default function AuthPage() {
   const [feedback, setFeedback] = useState({ type: "", text: "" });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { isAuthenticated, login } = useAuth();
+  const { isAuthenticated, login, role } = useAuth();
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -89,15 +89,17 @@ export default function AuthPage() {
   }, [theme]);
 
   const activeTitle = useMemo(() => {
+    if (adminMode) return "Sign in to manage users and platform-wide content";
     if (mode === "signup") return "Create an account that feels ready on day one";
     return "Sign in and continue building with your team";
-  }, [mode]);
+  }, [adminMode, mode]);
 
   function setFeedbackMessage(type, text) {
     setFeedback(text ? { type, text } : { type: "", text: "" });
   }
 
   function switchMode(nextMode) {
+    if (adminMode && nextMode !== "login") return;
     setMode(nextMode);
     setFeedbackMessage("", "");
   }
@@ -216,7 +218,7 @@ export default function AuthPage() {
     setLoading(true);
     setFeedbackMessage("", "");
     try {
-      const token = await authApi.login({
+      const token = await (adminMode ? adminApi.login : authApi.login)({
         email: loginForm.email.trim(),
         password: loginForm.password
       });
@@ -228,14 +230,20 @@ export default function AuthPage() {
         throw new Error("Login succeeded but no user id was found in the token.");
       }
 
-      try {
-        profile = await userApi.getById(userId, token, userId);
-      } catch {
-        profile = { fullName: loginForm.email.trim(), email: loginForm.email.trim() };
+      if (adminMode && payload.role !== "PLATFORM_ADMIN" && payload.role !== "ADMIN") {
+        throw new Error("This account does not have admin access.");
+      }
+
+      if (userId > 0) {
+        try {
+          profile = await userApi.getById(userId, token, userId);
+        } catch {
+          profile = { fullName: loginForm.email.trim(), email: loginForm.email.trim() };
+        }
       }
 
       login({ token, userId, role: payload.role || "", profile });
-      navigate(payload.role === "PLATFORM_ADMIN" ? "/app/admin" : "/app");
+      navigate(payload.role === "PLATFORM_ADMIN" || payload.role === "ADMIN" ? "/app/admin" : "/app");
     } catch (error) {
       setFeedbackMessage("error", formatAuthError(error.message));
     } finally {
@@ -244,7 +252,7 @@ export default function AuthPage() {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/app" replace />;
+    return <Navigate to={role === "PLATFORM_ADMIN" || role === "ADMIN" ? "/app/admin" : "/app"} replace />;
   }
 
   return (
@@ -255,7 +263,7 @@ export default function AuthPage() {
             <span className="brand-mark">F</span>
             <div>
               <strong>FlowBoard</strong>
-              <p>Organize boards, lists, cards, and team momentum from one place.</p>
+              <p>{adminMode ? "Secure platform administration for FlowBoard." : "Organize boards, lists, cards, and team momentum from one place."}</p>
             </div>
           </div>
           <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label="Toggle light and dark theme">
@@ -264,23 +272,25 @@ export default function AuthPage() {
         </div>
 
         <div className="auth-showcase-copy">
-          <p className="eyebrow">Project Focus</p>
-          <h1>Workflows that stay clear even when the project gets messy.</h1>
+          <p className="eyebrow">{adminMode ? "Admin Access" : "Project Focus"}</p>
+          <h1>{adminMode ? "One place for admin login, user review, and moderation." : "Workflows that stay clear even when the project gets messy."}</h1>
           <p className="landing-copy auth-copy">
-            Move from signup to shipping with a cleaner auth screen, stronger visual hierarchy, and a theme switch that feels built in instead of added later.
+            {adminMode
+              ? "Use your platform admin account to review all users, disable access when needed, and delete accounts from a separate admin panel."
+              : "Move from signup to shipping with a cleaner auth screen, stronger visual hierarchy, and a theme switch that feels built in instead of added later."}
           </p>
         </div>
 
         <div className="auth-feature-grid">
           <article className="auth-feature-card">
-            <span className="auth-feature-kicker">Boards</span>
-            <h3>Plan work visually</h3>
-            <p>Track priorities, ownership, and status without losing the bigger picture.</p>
+            <span className="auth-feature-kicker">{adminMode ? "Users" : "Boards"}</span>
+            <h3>{adminMode ? "Review every account" : "Plan work visually"}</h3>
+            <p>{adminMode ? "See all registered users from a single admin dashboard." : "Track priorities, ownership, and status without losing the bigger picture."}</p>
           </article>
           <article className="auth-feature-card">
-            <span className="auth-feature-kicker">Teams</span>
-            <h3>Keep collaboration calm</h3>
-            <p>Give everyone one place to check progress, updates, and what needs attention next.</p>
+            <span className="auth-feature-kicker">{adminMode ? "Safety" : "Teams"}</span>
+            <h3>{adminMode ? "Disable or remove users" : "Keep collaboration calm"}</h3>
+            <p>{adminMode ? "Handle user access directly without affecting the normal user app flow." : "Give everyone one place to check progress, updates, and what needs attention next."}</p>
           </article>
           <article className="auth-feature-card accent-card">
             <span className="auth-feature-kicker">Theme</span>
@@ -292,19 +302,21 @@ export default function AuthPage() {
 
       <section className="auth-panel form-panel auth-card auth-card-modern">
         <div className="auth-header auth-header-modern">
-          <p className="eyebrow">Welcome Back</p>
-          <h2>{mode === "signup" ? "Create your FlowBoard account" : "Login to your workspace"}</h2>
+          <p className="eyebrow">{adminMode ? "Admin Panel" : "Welcome Back"}</p>
+          <h2>{adminMode ? "Login to the admin panel" : mode === "signup" ? "Create your FlowBoard account" : "Login to your workspace"}</h2>
           <p className="auth-subtitle">{activeTitle}</p>
         </div>
 
-        <div className="tab-row auth-tab-row">
-          <button type="button" className={mode === "login" ? "tab active" : "tab"} onClick={() => switchMode("login")}>
-            Login
-          </button>
-          <button type="button" className={mode === "signup" ? "tab active" : "tab"} onClick={() => switchMode("signup")}>
-            Signup
-          </button>
-        </div>
+        {adminMode ? null : (
+          <div className="tab-row auth-tab-row">
+            <button type="button" className={mode === "login" ? "tab active" : "tab"} onClick={() => switchMode("login")}>
+              Login
+            </button>
+            <button type="button" className={mode === "signup" ? "tab active" : "tab"} onClick={() => switchMode("signup")}>
+              Signup
+            </button>
+          </div>
+        )}
 
         {mode === "login" ? (
           <form className="form-grid auth-form-grid" onSubmit={handleLogin}>
@@ -326,8 +338,8 @@ export default function AuthPage() {
                 placeholder="Password@1"
               />
             </label>
-            <p className="auth-note auth-note-soft">Use the same password format enforced by the backend so login and signup stay consistent.</p>
-            <button className="primary-button auth-submit" disabled={loading}>{loading ? "Signing in..." : "Login"}</button>
+            <p className="auth-note auth-note-soft">{adminMode ? "Only platform admin accounts can continue from this screen." : "Use the same password format enforced by the backend so login and signup stay consistent."}</p>
+            <button className="primary-button auth-submit" disabled={loading}>{loading ? "Signing in..." : adminMode ? "Login as Admin" : "Login"}</button>
           </form>
         ) : (
           <form className="form-grid auth-form-grid" onSubmit={handleSignup}>
@@ -358,8 +370,14 @@ export default function AuthPage() {
           </form>
         )}
 
+        <div className="auth-note auth-note-soft" style={{ marginTop: 16 }}>
+          {adminMode ? <Link to="/auth">Back to user login</Link> : <Link to="/admin/login">Admin login</Link>}
+        </div>
+
         {feedback.text ? <p className={`feedback ${feedback.type === "success" ? "feedback-success" : "feedback-error"}`}>{feedback.text}</p> : null}
       </section>
     </div>
   );
 }
+
+

@@ -6,16 +6,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api/v1/admin/workspaces": {
-        target: "http://localhost:8084",
-        changeOrigin: true
-      },
-      "/api/v1/admin/boards": {
-        target: "http://localhost:8085",
-        changeOrigin: true
-      },
       "/api/v1/admin": {
-        target: "http://localhost:8081",
+        target: "http://localhost:8091",
         changeOrigin: true
       },
       "/api/v1/auth": {

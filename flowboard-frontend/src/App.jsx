@@ -56,6 +56,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/auth" replace />} />
         <Route path="/auth" element={<AuthPage />} />
+        <Route path="/admin/login" element={<AuthPage adminMode />} />
         <Route
           path="/app"
           element={
@@ -84,3 +85,4 @@ export default function App() {
     </>
   );
 }
+
