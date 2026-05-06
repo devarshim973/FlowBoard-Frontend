@@ -272,31 +272,33 @@ export default function AuthPage({ adminMode = false }) {
         </div>
 
         <div className="auth-showcase-copy">
-          <p className="eyebrow">{adminMode ? "Admin Access" : "Project Focus"}</p>
-          <h1>{adminMode ? "One place for admin login, user review, and moderation." : "Workflows that stay clear even when the project gets messy."}</h1>
+          {adminMode ? <p className="eyebrow">Admin Access</p> : null}
+          <h1>{adminMode ? "One place for admin login, user review, and moderation." : "Bring calm to boards, lists, and team momentum."}</h1>
           <p className="landing-copy auth-copy">
             {adminMode
               ? "Use your platform admin account to review all users, disable access when needed, and delete accounts from a separate admin panel."
-              : "Move from signup to shipping with a cleaner auth screen, stronger visual hierarchy, and a theme switch that feels built in instead of added later."}
+              : "FlowBoard gives your team one clean place to plan work, open boards fast, and keep delivery moving without the interface feeling heavy."}
           </p>
         </div>
 
         <div className="auth-feature-grid">
           <article className="auth-feature-card">
             <span className="auth-feature-kicker">{adminMode ? "Users" : "Boards"}</span>
-            <h3>{adminMode ? "Review every account" : "Plan work visually"}</h3>
-            <p>{adminMode ? "See all registered users from a single admin dashboard." : "Track priorities, ownership, and status without losing the bigger picture."}</p>
+            <h3>{adminMode ? "Review every account" : "See work at a glance"}</h3>
+            <p>{adminMode ? "See all registered users from a single admin dashboard." : "Keep board status, ownership, and next actions visible without digging through screens."}</p>
           </article>
           <article className="auth-feature-card">
-            <span className="auth-feature-kicker">{adminMode ? "Safety" : "Teams"}</span>
-            <h3>{adminMode ? "Disable or remove users" : "Keep collaboration calm"}</h3>
-            <p>{adminMode ? "Handle user access directly without affecting the normal user app flow." : "Give everyone one place to check progress, updates, and what needs attention next."}</p>
+            <span className="auth-feature-kicker">{adminMode ? "Safety" : "Flow"}</span>
+            <h3>{adminMode ? "Disable or remove users" : "Move with less friction"}</h3>
+            <p>{adminMode ? "Handle user access directly without affecting the normal user app flow." : "From login to daily work, the layout stays simple so the team can focus on shipping."}</p>
           </article>
-          <article className="auth-feature-card accent-card">
-            <span className="auth-feature-kicker">Theme</span>
-            <h3>{theme === "light" ? "Warm light mode" : "Focused dark mode"}</h3>
-            <p>Switch the atmosphere instantly without leaving the page or resetting the form.</p>
-          </article>
+          {adminMode ? (
+            <article className="auth-feature-card accent-card">
+              <span className="auth-feature-kicker">Theme</span>
+              <h3>{theme === "light" ? "Warm light mode" : "Focused dark mode"}</h3>
+              <p>Switch the atmosphere instantly without leaving the page or resetting the form.</p>
+            </article>
+          ) : null}
         </div>
       </section>
 
