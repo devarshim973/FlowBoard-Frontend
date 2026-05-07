@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { getBoardId, getWorkspaceId } from "../services/helpers";
 
-export default function WorkspaceCard({ workspace, boards, onCreateBoard }) {
+export default function WorkspaceCard({ workspace, boards, onCreateBoard, onDeleteWorkspace, onDeleteBoard }) {
   const workspaceId = getWorkspaceId(workspace);
 
   return (
@@ -12,9 +12,14 @@ export default function WorkspaceCard({ workspace, boards, onCreateBoard }) {
           <h3>{workspace.name || "Untitled Workspace"}</h3>
           <span>{workspace.description || "Build boards, coordinate teams, and ship faster."}</span>
         </div>
-        <button className="secondary-button" onClick={() => onCreateBoard(workspaceId)}>
-          New board
-        </button>
+        <div className="inline-actions">
+          <button className="secondary-button" onClick={() => onCreateBoard(workspaceId)}>
+            New board
+          </button>
+          <button className="danger-button" onClick={() => onDeleteWorkspace(workspace)}>
+            Delete workspace
+          </button>
+        </div>
       </div>
 
       <div className="board-grid">
@@ -22,12 +27,20 @@ export default function WorkspaceCard({ workspace, boards, onCreateBoard }) {
           boards.map((board) => {
             const boardId = getBoardId(board);
             return (
-              <Link key={boardId} to={`/app/board/${boardId}`} className="board-tile" style={{ "--board-accent": board.background || "#0ea5e9" }}>
+              <article key={boardId} className="board-tile" style={{ "--board-accent": board.background || "#0ea5e9" }}>
                 <div className="board-glow" />
                 <p>{board.visibility || "Team Board"}</p>
                 <h4>{board.name}</h4>
                 <span>{board.description || "Jump into lists, cards, updates and delivery progress."}</span>
-              </Link>
+                <div className="board-tile-actions">
+                  <Link to={`/app/board/${boardId}`} className="secondary-button board-open-button">
+                    Open board
+                  </Link>
+                  <button className="danger-button" onClick={() => onDeleteBoard(board, workspaceId)}>
+                    Delete board
+                  </button>
+                </div>
+              </article>
             );
           })
         ) : (

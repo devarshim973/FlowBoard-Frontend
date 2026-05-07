@@ -2,7 +2,7 @@ import { formatDate } from "../services/helpers";
 
 export default function NotificationPanel({ notifications, onMarkAll }) {
   return (
-    <section className="panel" id="notifications">
+    <section className="panel notification-panel" id="notifications">
       <div className="panel-head">
         <div>
           <p className="eyebrow">Notifications</p>

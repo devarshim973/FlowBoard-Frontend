@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import BoardColumn from "../components/BoardColumn";
 import Modal from "../components/Modal";
 import Shell from "../components/Shell";
@@ -17,6 +17,7 @@ const nextStatusMap = {
 export default function BoardPage() {
   const { boardId } = useParams();
   const { token, userId } = useAuth();
+  const navigate = useNavigate();
   const [board, setBoard] = useState(null);
   const [lists, setLists] = useState([]);
   const [cards, setCards] = useState([]);
@@ -197,6 +198,29 @@ export default function BoardPage() {
     }
   }
 
+  async function handleDeleteList(list) {
+    if (!confirm(`Delete list "${list.name || "Untitled List"}"?`)) return;
+    try {
+      const listId = getListId(list);
+      await listApi.delete(listId, token, userId);
+      setLists((current) => current.filter((item) => getListId(item) !== listId));
+      setCards((current) => current.filter((item) => item.listId !== listId));
+      setMessage("");
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function handleDeleteBoard() {
+    if (!confirm(`Delete board "${board?.name || "this board"}"?`)) return;
+    try {
+      await boardApi.delete(Number(boardId), token, userId);
+      navigate("/app");
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
   async function updateCard(event) {
     event.preventDefault();
     const cardId = getCardId(editCardModalState.card);
@@ -218,7 +242,17 @@ export default function BoardPage() {
   }
 
   return (
-    <Shell title={board?.name || "Board Surface"} subtitle={board?.description || "Move lists, track cards, and keep comments visible."} notificationCount={notificationCount} actions={<button className="primary-button" onClick={() => setListModalOpen(true)}>New list</button>}>
+    <Shell
+      title={board?.name || "Board Surface"}
+      subtitle={board?.description || "Move lists, track cards, and keep comments visible."}
+      notificationCount={notificationCount}
+      actions={(
+        <div className="inline-actions">
+          <button className="primary-button" onClick={() => setListModalOpen(true)}>New list</button>
+          <button className="danger-button" onClick={handleDeleteBoard}>Delete board</button>
+        </div>
+      )}
+    >
       {message ? <div className="feedback-banner">{message}</div> : null}
 
       <section className="board-layout">
@@ -228,7 +262,7 @@ export default function BoardPage() {
               const listId = getListId(selectedList);
               setCardModalState({ open: true, listId });
               setCardForm((current) => ({ ...current, listId }));
-            }} onQuickStatus={quickStatus} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onEditCard={handleEditCard} onDeleteCard={handleDeleteCard} />
+            }} onQuickStatus={quickStatus} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onEditCard={handleEditCard} onDeleteCard={handleDeleteCard} onDeleteList={handleDeleteList} />
           ))}
         </div>
 

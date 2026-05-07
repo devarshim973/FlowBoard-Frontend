@@ -1,6 +1,6 @@
 import { formatDate, getCardId } from "../services/helpers";
 
-export default function BoardColumn({ list, onCreateCard, onQuickStatus, onDragStart, onDrop, onDragOver, onEditCard, onDeleteCard }) {
+export default function BoardColumn({ list, onCreateCard, onQuickStatus, onDragStart, onDrop, onDragOver, onEditCard, onDeleteCard, onDeleteList }) {
   return (
     <section className="board-column" onDrop={(e) => onDrop(e, list)} onDragOver={onDragOver}>
       <div className="column-head">
@@ -8,7 +8,12 @@ export default function BoardColumn({ list, onCreateCard, onQuickStatus, onDragS
           <p className="eyebrow">List</p>
           <h3>{list.name || "Untitled List"}</h3>
         </div>
-        <span>{list.cards.length} cards</span>
+        <div className="column-actions">
+          <span>{list.cards.length} cards</span>
+          <button className="link-button danger-link" onClick={() => onDeleteList(list)}>
+            Delete list
+          </button>
+        </div>
       </div>
 
       <div className="card-stack">

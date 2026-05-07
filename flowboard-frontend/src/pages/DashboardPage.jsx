@@ -236,10 +236,44 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleDeleteWorkspace(workspace) {
+    const workspaceId = getWorkspaceId(workspace);
+    if (!workspaceId || !confirm(`Delete workspace "${workspace.name || "Untitled Workspace"}"?`)) return;
+
+    try {
+      await workspaceApi.delete(workspaceId, token, userId);
+      setWorkspaces((current) => current.filter((item) => getWorkspaceId(item) !== workspaceId));
+      setBoardsByWorkspace((current) => {
+        const next = { ...current };
+        delete next[workspaceId];
+        return next;
+      });
+      setMessage("");
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function handleDeleteBoard(board, workspaceId) {
+    const boardId = board.boardId ?? board.id;
+    if (!boardId || !confirm(`Delete board "${board.name || "Untitled Board"}"?`)) return;
+
+    try {
+      await boardApi.delete(boardId, token, userId);
+      setBoardsByWorkspace((current) => ({
+        ...current,
+        [workspaceId]: (current[workspaceId] || []).filter((item) => (item.boardId ?? item.id) !== boardId)
+      }));
+      setMessage("");
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
   return (
     <Shell
-      title="Workspace Command"
-      subtitle="Track your delivery pulse, open boards fast, and orchestrate team movement."
+      title="Control Center"
+      subtitle="A clearer view of boards and activity."
       notificationCount={notificationCount}
       membershipLabel={activeSubscription ? "Premium" : "Collaborator"}
       actions={<button className="primary-button" disabled={paymentLoading} onClick={() => {
@@ -251,12 +285,57 @@ export default function DashboardPage() {
         setWorkspaceModalOpen(true);
       }}>{workspaceActionLabel}</button>}
     >
-      <section className="metrics-grid">
-        <MetricCard title="Workspaces" value={workspaces.length} hint="Personal and team spaces" />
-        <MetricCard title="Boards" value={Object.values(boardsByWorkspace).flat().length} hint="Across all active workspaces" tone="green" />
-        <MetricCard title="Unread Alerts" value={notificationCount} hint="Assignments and reminders" tone="orange" />
-        <MetricCard title="Plan" value={activeSubscription ? "Premium" : "Free"} hint={activeSubscription ? "Unlimited workspaces unlocked" : `${ownedWorkspaceCount}/${FREE_WORKSPACE_LIMIT} owned workspaces used`} />
-      </section>
+      <div className="dashboard-surface">
+        <section className="dashboard-hero">
+          <article className="hero-spotlight">
+            <p className="eyebrow">Workspace overview</p>
+            <h2>{workspaces.length ? `You have ${workspaces.length} workspace${workspaces.length > 1 ? "s" : ""} in motion.` : "Launch your first workspace."}</h2>
+            <p className="hero-text">
+              Keep boards organized, watch recent activity, and manage team flow from one focused dashboard.
+            </p>
+            <div className="hero-actions-row">
+              <button
+                type="button"
+                className="primary-button"
+                disabled={paymentLoading}
+                onClick={() => {
+                  if (requiresWorkspaceUpgrade) {
+                    startWorkspaceUpgrade();
+                    return;
+                  }
+
+                  setWorkspaceModalOpen(true);
+                }}
+              >
+                {workspaceActionLabel}
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  document.getElementById("boards")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              >
+                Explore boards
+              </button>
+            </div>
+          </article>
+
+          <aside className="hero-rail">
+            <article className="hero-mini-card hero-mini-card-plan">
+              <span className="hero-mini-label">Plan</span>
+              <strong>{activeSubscription ? "Premium Active" : "Free Plan"}</strong>
+              <p>{activeSubscription ? "Unlimited workspace creation unlocked." : `${ownedWorkspaceCount}/${FREE_WORKSPACE_LIMIT} owned workspace slots used.`}</p>
+            </article>
+          </aside>
+        </section>
+
+        <section className="metrics-grid dashboard-metrics">
+          <MetricCard title="Workspaces" value={workspaces.length} hint="Personal and team spaces" delay={80} />
+          <MetricCard title="Boards" value={Object.values(boardsByWorkspace).flat().length} hint="Across all active workspaces" tone="green" delay={160} />
+          <MetricCard title="Plan" value={activeSubscription ? "Premium" : "Free"} hint={activeSubscription ? "Unlimited workspaces unlocked" : `${ownedWorkspaceCount}/${FREE_WORKSPACE_LIMIT} owned workspaces used`} delay={240} />
+        </section>
+      </div>
 
       {showUpgradeControls ? (
         <section
@@ -311,21 +390,6 @@ export default function DashboardPage() {
         </div>
       ) : null}
       {activeSubscription ? <div className="feedback-banner">Premium is active on this account. You can create unlimited workspaces now.</div> : null}
-      {showUpgradeControls ? (
-        <div className="feedback-banner">
-          <strong>Upgrade required.</strong> Free plan allows 3 owned workspaces.
-          <button
-            type="button"
-            className="primary-button"
-            disabled={paymentLoading}
-            onClick={() => startWorkspaceUpgrade()}
-            style={{ marginLeft: "12px" }}
-          >
-            {paymentLoading ? "Opening checkout..." : "Upgrade Now"}
-          </button>
-        </div>
-      ) : null}
-
       <div className="dashboard-grid">
         <div className="dashboard-main" id="boards">
           {workspaces.length ? (
@@ -334,7 +398,7 @@ export default function DashboardPage() {
               return <WorkspaceCard key={workspaceId} workspace={workspace} boards={boardsByWorkspace[workspaceId] || []} onCreateBoard={(selectedWorkspaceId) => {
                 setBoardModalState({ open: true, workspaceId: selectedWorkspaceId });
                 setBoardForm((current) => ({ ...current, workspaceId: selectedWorkspaceId }));
-              }} />;
+              }} onDeleteWorkspace={handleDeleteWorkspace} onDeleteBoard={handleDeleteBoard} />;
             })
           ) : (
             <section className="panel">

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { adminApi, authApi, userApi } from "../services/api";
 import { decodeJwt } from "../services/helpers";
 import { useAuth } from "../state/AuthContext";
@@ -81,12 +81,20 @@ export default function AuthPage({ adminMode = false }) {
   const [feedback, setFeedback] = useState({ type: "", text: "" });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isAuthenticated, login, role } = useAuth();
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
+
+  useEffect(() => {
+    const oauthError = searchParams.get("oauthError");
+    if (oauthError) {
+      setFeedbackMessage("error", decodeURIComponent(oauthError));
+    }
+  }, [searchParams]);
 
   const activeTitle = useMemo(() => {
     if (adminMode) return "Sign in to manage users and platform-wide content";
@@ -106,6 +114,10 @@ export default function AuthPage({ adminMode = false }) {
 
   function toggleTheme() {
     setTheme((currentTheme) => (currentTheme === "light" ? "dark" : "light"));
+  }
+
+  function handleGoogleLogin() {
+    window.location.href = "/oauth2/authorization/google";
   }
 
   function validateLoginForm() {
@@ -266,8 +278,8 @@ export default function AuthPage({ adminMode = false }) {
               <p>{adminMode ? "Secure platform administration for FlowBoard." : "Organize boards, lists, cards, and team momentum from one place."}</p>
             </div>
           </div>
-          <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label="Toggle light and dark theme">
-            <span>{theme === "light" ? "Dark" : "Light"} mode</span>
+          <button type="button" className="theme-toggle icon-only-theme-toggle" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+            <span className="theme-toggle-icon" aria-hidden="true" />
           </button>
         </div>
 
@@ -342,6 +354,16 @@ export default function AuthPage({ adminMode = false }) {
             </label>
             <p className="auth-note auth-note-soft">{adminMode ? "Only platform admin accounts can continue from this screen." : "Use the same password format enforced by the backend so login and signup stay consistent."}</p>
             <button className="primary-button auth-submit" disabled={loading}>{loading ? "Signing in..." : adminMode ? "Login as Admin" : "Login"}</button>
+            {adminMode ? null : (
+              <>
+                <div className="auth-divider">
+                  <span>or</span>
+                </div>
+                <button type="button" className="google-button" onClick={handleGoogleLogin} disabled={loading}>
+                  Continue with Google
+                </button>
+              </>
+            )}
           </form>
         ) : (
           <form className="form-grid auth-form-grid" onSubmit={handleSignup}>

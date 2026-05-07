@@ -4,6 +4,7 @@ import AuthPage from "./pages/AuthPage";
 import DashboardPage from "./pages/DashboardPage";
 import BoardPage from "./pages/BoardPage";
 import AdminPage from "./pages/AdminPage";
+import OAuthSuccessPage from "./pages/OAuthSuccessPage";
 import { useAuth } from "./state/AuthContext";
 
 function ProtectedRoute({ children }) {
@@ -56,6 +57,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/auth" replace />} />
         <Route path="/auth" element={<AuthPage />} />
+        <Route path="/oauth-success" element={<OAuthSuccessPage />} />
         <Route path="/admin/login" element={<AuthPage adminMode />} />
         <Route
           path="/app"

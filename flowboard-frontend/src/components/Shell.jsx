@@ -49,9 +49,6 @@ export default function Shell({ children, title, subtitle, actions, notification
           <button type="button" className="nav-pill" onClick={() => goToSection("#timeline")}>
             Timeline
           </button>
-          <button type="button" className="nav-pill" onClick={() => goToSection("#notifications")}>
-            Alerts
-          </button>
         </nav>
 
         <div className="sidebar-card">
@@ -59,28 +56,20 @@ export default function Shell({ children, title, subtitle, actions, notification
           <h3>Backend-ready structure</h3>
           <p>Connected around auth, workspace, board, list, card, comment and notification services.</p>
         </div>
-
-        <button className="ghost-button" onClick={logout}>
-          Sign out
-        </button>
       </aside>
 
       <main className="main-panel">
         <header className="topbar">
-          <div>
+          <div className="topbar-copy">
             <p className="eyebrow">{title}</p>
             <h1>{subtitle}</h1>
           </div>
 
           <div className="topbar-actions">
-            <button type="button" className="theme-toggle app-theme-toggle" onClick={toggleTheme}>
-              {theme === "dark" ? "Light mode" : "Dark mode"}
+            <button type="button" className="theme-toggle icon-only-theme-toggle app-theme-toggle" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+              <span className="theme-toggle-icon" aria-hidden="true" />
             </button>
             {actions}
-            <div className="notification-chip">
-              <span>Alerts</span>
-              <strong>{notificationCount}</strong>
-            </div>
             <div className="user-pill">
               <div className="avatar-ring">{(profile?.fullName || "U").slice(0, 1)}</div>
               <div>
@@ -88,6 +77,9 @@ export default function Shell({ children, title, subtitle, actions, notification
                 <p>{membershipLabel}</p>
               </div>
             </div>
+            <button className="ghost-button signout-top-button" onClick={logout}>
+              Sign out
+            </button>
           </div>
         </header>
 
