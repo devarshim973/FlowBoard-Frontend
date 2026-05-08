@@ -3,11 +3,19 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import AuthPage from "./pages/AuthPage";
 import DashboardPage from "./pages/DashboardPage";
 import BoardPage from "./pages/BoardPage";
+import AdminPage from "./pages/AdminPage";
+import OAuthSuccessPage from "./pages/OAuthSuccessPage";
 import { useAuth } from "./state/AuthContext";
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuth();
   return isAuthenticated ? children : <Navigate to="/auth" replace />;
+}
+
+function AdminRoute({ children }) {
+  const { isAuthenticated, isAdmin } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/auth" replace />;
+  return isAdmin ? children : <Navigate to="/app" replace />;
 }
 
 function HashScroller() {
@@ -49,6 +57,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/auth" replace />} />
         <Route path="/auth" element={<AuthPage />} />
+        <Route path="/oauth-success" element={<OAuthSuccessPage />} />
+        <Route path="/admin/login" element={<AuthPage adminMode />} />
         <Route
           path="/app"
           element={
@@ -65,7 +75,16 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/app/admin"
+          element={
+            <AdminRoute>
+              <AdminPage />
+            </AdminRoute>
+          }
+        />
       </Routes>
     </>
   );
 }
+

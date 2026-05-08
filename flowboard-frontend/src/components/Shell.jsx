@@ -1,12 +1,26 @@
+import { useEffect, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 
 export default function Shell({ children, title, subtitle, actions, notificationCount = 0, membershipLabel = "Collaborator" }) {
-  const { logout, profile } = useAuth();
+  const { logout, profile, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const [theme, setTheme] = useState("light");
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    setTheme(document.documentElement.getAttribute("data-theme") || "light");
+  }, []);
 
   function goToSection(hash) {
     navigate(`/app${hash}`);
+  }
+
+  function toggleTheme() {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", nextTheme);
+    window.localStorage.setItem("flowboard-theme", nextTheme);
+    setTheme(nextTheme);
   }
 
   return (
@@ -24,14 +38,16 @@ export default function Shell({ children, title, subtitle, actions, notification
           <NavLink to="/app" end className="nav-pill">
             Dashboard
           </NavLink>
+          {isAdmin ? (
+            <NavLink to="/app/admin" className="nav-pill">
+              Admin
+            </NavLink>
+          ) : null}
           <button type="button" className="nav-pill" onClick={() => goToSection("#boards")}>
             Boards
           </button>
           <button type="button" className="nav-pill" onClick={() => goToSection("#timeline")}>
             Timeline
-          </button>
-          <button type="button" className="nav-pill" onClick={() => goToSection("#notifications")}>
-            Alerts
           </button>
         </nav>
 
@@ -40,25 +56,20 @@ export default function Shell({ children, title, subtitle, actions, notification
           <h3>Backend-ready structure</h3>
           <p>Connected around auth, workspace, board, list, card, comment and notification services.</p>
         </div>
-
-        <button className="ghost-button" onClick={logout}>
-          Sign out
-        </button>
       </aside>
 
       <main className="main-panel">
         <header className="topbar">
-          <div>
+          <div className="topbar-copy">
             <p className="eyebrow">{title}</p>
             <h1>{subtitle}</h1>
           </div>
 
           <div className="topbar-actions">
+            <button type="button" className="theme-toggle icon-only-theme-toggle app-theme-toggle" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+              <span className="theme-toggle-icon" aria-hidden="true" />
+            </button>
             {actions}
-            <div className="notification-chip">
-              <span>Alerts</span>
-              <strong>{notificationCount}</strong>
-            </div>
             <div className="user-pill">
               <div className="avatar-ring">{(profile?.fullName || "U").slice(0, 1)}</div>
               <div>
@@ -66,6 +77,9 @@ export default function Shell({ children, title, subtitle, actions, notification
                 <p>{membershipLabel}</p>
               </div>
             </div>
+            <button className="ghost-button signout-top-button" onClick={logout}>
+              Sign out
+            </button>
           </div>
         </header>
 

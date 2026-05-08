@@ -1,7 +1,6 @@
-import { useMemo, useState } from "react";
-import { Navigate } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
-import { authApi, userApi } from "../services/api";
+import { useEffect, useMemo, useState } from "react";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { adminApi, authApi, userApi } from "../services/api";
 import { decodeJwt } from "../services/helpers";
 import { useAuth } from "../state/AuthContext";
 
@@ -17,14 +16,9 @@ const initialLogin = {
   password: ""
 };
 
-const initialReset = {
-  email: "",
-  otp: "",
-  newPassword: ""
-};
-
 const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const THEME_STORAGE_KEY = "flowboard-theme";
 
 function formatAuthError(message) {
   if (!message) {
@@ -36,11 +30,27 @@ function formatAuthError(message) {
   }
 
   if (message.includes("User already exist")) {
-    return "This email is already registered. Try logging in or use OTP Reset.";
+    return "This email is already registered. Try logging in instead.";
   }
 
   if (message.includes("Signup OTP is required")) {
     return "Send the signup OTP first, then enter it here to complete registration.";
+  }
+
+  if (message.includes("SMTP authentication failed")) {
+    return "OTP email could not be delivered because SMTP_USERNAME or SMTP_APP_PASSWORD is wrong.";
+  }
+
+  if (message.includes("SMTP email is not configured")) {
+    return "OTP email could not be delivered because SMTP_USERNAME, SMTP_APP_PASSWORD, or SMTP_FROM_EMAIL is missing in auth-service.";
+  }
+
+  if (message.includes("Unable to send email via SMTP")) {
+    return "OTP email could not be delivered. Check Gmail SMTP settings and the generated app password.";
+  }
+
+  if (message.includes("Unable to send email")) {
+    return "OTP email could not be delivered because the email provider is not configured correctly yet.";
   }
 
   if (message.includes("disabled") || message.includes("Bad credentials")) {
@@ -50,29 +60,64 @@ function formatAuthError(message) {
   return message;
 }
 
-export default function AuthPage() {
+function getInitialTheme() {
+  if (typeof window === "undefined") {
+    return "light";
+  }
+
+  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+  if (storedTheme === "light" || storedTheme === "dark") {
+    return storedTheme;
+  }
+
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+export default function AuthPage({ adminMode = false }) {
   const [mode, setMode] = useState("login");
+  const [theme, setTheme] = useState(getInitialTheme);
   const [signupForm, setSignupForm] = useState(initialSignup);
   const [loginForm, setLoginForm] = useState(initialLogin);
-  const [resetForm, setResetForm] = useState(initialReset);
   const [feedback, setFeedback] = useState({ type: "", text: "" });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { isAuthenticated, login } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { isAuthenticated, login, role } = useAuth();
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
+  useEffect(() => {
+    const oauthError = searchParams.get("oauthError");
+    if (oauthError) {
+      setFeedbackMessage("error", decodeURIComponent(oauthError));
+    }
+  }, [searchParams]);
 
   const activeTitle = useMemo(() => {
-    if (mode === "signup") return "Create your account";
-    if (mode === "reset") return "Reset your password";
-    return "Login to continue";
-  }, [mode]);
+    if (adminMode) return "Sign in to manage users and platform-wide content";
+    if (mode === "signup") return "Create an account that feels ready on day one";
+    return "Sign in and continue building with your team";
+  }, [adminMode, mode]);
 
   function setFeedbackMessage(type, text) {
     setFeedback(text ? { type, text } : { type: "", text: "" });
   }
 
   function switchMode(nextMode) {
+    if (adminMode && nextMode !== "login") return;
     setMode(nextMode);
     setFeedbackMessage("", "");
+  }
+
+  function toggleTheme() {
+    setTheme((currentTheme) => (currentTheme === "light" ? "dark" : "light"));
+  }
+
+  function handleGoogleLogin() {
+    window.location.href = "/oauth2/authorization/google";
   }
 
   function validateLoginForm() {
@@ -86,10 +131,6 @@ export default function AuthPage() {
 
     if (!loginForm.password) {
       return "Password is required.";
-    }
-
-    if (!passwordPattern.test(loginForm.password)) {
-      return "Password must contain uppercase, lowercase, number, special character, and be at least 8 characters.";
     }
 
     return "";
@@ -123,26 +164,6 @@ export default function AuthPage() {
     return "";
   }
 
-  function validateResetForm(requireOtp) {
-    if (!emailPattern.test(resetForm.email.trim())) {
-      return "Enter the registered email address.";
-    }
-
-    if (!requireOtp) {
-      return "";
-    }
-
-    if (resetForm.otp.trim().length !== 6) {
-      return "OTP must be 6 characters.";
-    }
-
-    if (!passwordPattern.test(resetForm.newPassword)) {
-      return "New password must contain uppercase, lowercase, number, special character, and be at least 8 characters.";
-    }
-
-    return "";
-  }
-
   async function handleSignup(event) {
     event.preventDefault();
     const validationMessage = validateSignupForm();
@@ -169,7 +190,7 @@ export default function AuthPage() {
         password: payload.password
       });
       setMode("login");
-      setFeedbackMessage("success", "Account created successfully. Now click Login to enter FlowBoard.");
+      setFeedbackMessage("success", "Account created successfully. Now sign in to enter FlowBoard.");
     } catch (error) {
       setFeedbackMessage("error", formatAuthError(error.message));
     } finally {
@@ -188,12 +209,8 @@ export default function AuthPage() {
     setLoading(true);
     setFeedbackMessage("", "");
     try {
-      const response = await authApi.sendSignupOtp(signupForm.email.trim());
-      const otpText = typeof response === "object" && response?.otp ? ` OTP: ${response.otp}` : "";
-      setFeedbackMessage("success", `Signup OTP sent.${otpText} Enter it below to finish creating your account.`);
-      if (typeof response === "object" && response?.otp) {
-        setSignupForm((current) => ({ ...current, otp: response.otp }));
-      }
+      await authApi.sendSignupOtp(signupForm.email.trim());
+      setFeedbackMessage("success", "Signup OTP sent to your email. Enter it below to finish creating your account.");
     } catch (error) {
       setFeedbackMessage("error", formatAuthError(error.message));
     } finally {
@@ -213,7 +230,7 @@ export default function AuthPage() {
     setLoading(true);
     setFeedbackMessage("", "");
     try {
-      const token = await authApi.login({
+      const token = await (adminMode ? adminApi.login : authApi.login)({
         email: loginForm.email.trim(),
         password: loginForm.password
       });
@@ -225,7 +242,11 @@ export default function AuthPage() {
         throw new Error("Login succeeded but no user id was found in the token.");
       }
 
-      if (userId) {
+      if (adminMode && payload.role !== "PLATFORM_ADMIN" && payload.role !== "ADMIN") {
+        throw new Error("This account does not have admin access.");
+      }
+
+      if (userId > 0) {
         try {
           profile = await userApi.getById(userId, token, userId);
         } catch {
@@ -233,61 +254,8 @@ export default function AuthPage() {
         }
       }
 
-      login({ token, userId, profile });
-      navigate("/app");
-    } catch (error) {
-      setFeedbackMessage("error", formatAuthError(error.message));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleSendOtp(event) {
-    event.preventDefault();
-    const validationMessage = validateResetForm(false);
-
-    if (validationMessage) {
-      setFeedbackMessage("error", validationMessage);
-      return;
-    }
-
-    setLoading(true);
-    setFeedbackMessage("", "");
-    try {
-      const response = await authApi.sendOtp(resetForm.email.trim());
-      const otpText = typeof response === "object" && response?.otp ? ` OTP: ${response.otp}` : "";
-      setFeedbackMessage("success", `OTP is ready.${otpText} Enter the OTP and your new password below.`);
-      if (typeof response === "object" && response?.otp) {
-        setResetForm((current) => ({ ...current, otp: response.otp }));
-      }
-    } catch (error) {
-      setFeedbackMessage("error", formatAuthError(error.message));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleResetPassword(event) {
-    event.preventDefault();
-    const validationMessage = validateResetForm(true);
-
-    if (validationMessage) {
-      setFeedbackMessage("error", validationMessage);
-      return;
-    }
-
-    setLoading(true);
-    setFeedbackMessage("", "");
-    try {
-      await authApi.resetPassword({
-        email: resetForm.email.trim(),
-        otp: resetForm.otp.trim(),
-        newPassword: resetForm.newPassword
-      });
-      setResetForm(initialReset);
-      setLoginForm((current) => ({ ...current, email: resetForm.email.trim(), password: "" }));
-      setFeedbackMessage("success", "Password updated. You can log in now with the new password.");
-      setMode("login");
+      login({ token, userId, role: payload.role || "", profile });
+      navigate(payload.role === "PLATFORM_ADMIN" || payload.role === "ADMIN" ? "/app/admin" : "/app");
     } catch (error) {
       setFeedbackMessage("error", formatAuthError(error.message));
     } finally {
@@ -296,36 +264,76 @@ export default function AuthPage() {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/app" replace />;
+    return <Navigate to={role === "PLATFORM_ADMIN" || role === "ADMIN" ? "/app/admin" : "/app"} replace />;
   }
 
   return (
-    <div className="auth-page simple-auth-page">
-      <div className="auth-panel form-panel auth-card">
-        <div className="auth-header">
-          <div className="brand auth-brand">
+    <div className="auth-page auth-stage">
+      <section className="auth-showcase panel auth-showcase-panel">
+        <div className="auth-showcase-top">
+          <div className="brand auth-brand auth-brand-large">
             <span className="brand-mark">F</span>
             <div>
               <strong>FlowBoard</strong>
-              <p>{activeTitle}</p>
+              <p>{adminMode ? "Secure platform administration for FlowBoard." : "Organize boards, lists, cards, and team momentum from one place."}</p>
             </div>
           </div>
+          <button type="button" className="theme-toggle icon-only-theme-toggle" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+            <span className="theme-toggle-icon" aria-hidden="true" />
+          </button>
         </div>
 
-        <div className="tab-row">
-          <button type="button" className={mode === "login" ? "tab active" : "tab"} onClick={() => switchMode("login")}>
-            Login
-          </button>
-          <button type="button" className={mode === "signup" ? "tab active" : "tab"} onClick={() => switchMode("signup")}>
-            Signup
-          </button>
-          <button type="button" className={mode === "reset" ? "tab active" : "tab"} onClick={() => switchMode("reset")}>
-            OTP Reset
-          </button>
+        <div className="auth-showcase-copy">
+          {adminMode ? <p className="eyebrow">Admin Access</p> : null}
+          <h1>{adminMode ? "One place for admin login, user review, and moderation." : "Bring calm to boards, lists, and team momentum."}</h1>
+          <p className="landing-copy auth-copy">
+            {adminMode
+              ? "Use your platform admin account to review all users, disable access when needed, and delete accounts from a separate admin panel."
+              : "FlowBoard gives your team one clean place to plan work, open boards fast, and keep delivery moving without the interface feeling heavy."}
+          </p>
         </div>
+
+        <div className="auth-feature-grid">
+          <article className="auth-feature-card">
+            <span className="auth-feature-kicker">{adminMode ? "Users" : "Boards"}</span>
+            <h3>{adminMode ? "Review every account" : "See work at a glance"}</h3>
+            <p>{adminMode ? "See all registered users from a single admin dashboard." : "Keep board status, ownership, and next actions visible without digging through screens."}</p>
+          </article>
+          <article className="auth-feature-card">
+            <span className="auth-feature-kicker">{adminMode ? "Safety" : "Flow"}</span>
+            <h3>{adminMode ? "Disable or remove users" : "Move with less friction"}</h3>
+            <p>{adminMode ? "Handle user access directly without affecting the normal user app flow." : "From login to daily work, the layout stays simple so the team can focus on shipping."}</p>
+          </article>
+          {adminMode ? (
+            <article className="auth-feature-card accent-card">
+              <span className="auth-feature-kicker">Theme</span>
+              <h3>{theme === "light" ? "Warm light mode" : "Focused dark mode"}</h3>
+              <p>Switch the atmosphere instantly without leaving the page or resetting the form.</p>
+            </article>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="auth-panel form-panel auth-card auth-card-modern">
+        <div className="auth-header auth-header-modern">
+          <p className="eyebrow">{adminMode ? "Admin Panel" : "Welcome Back"}</p>
+          <h2>{adminMode ? "Login to the admin panel" : mode === "signup" ? "Create your FlowBoard account" : "Login to your workspace"}</h2>
+          <p className="auth-subtitle">{activeTitle}</p>
+        </div>
+
+        {adminMode ? null : (
+          <div className="tab-row auth-tab-row">
+            <button type="button" className={mode === "login" ? "tab active" : "tab"} onClick={() => switchMode("login")}>
+              Login
+            </button>
+            <button type="button" className={mode === "signup" ? "tab active" : "tab"} onClick={() => switchMode("signup")}>
+              Signup
+            </button>
+          </div>
+        )}
 
         {mode === "login" ? (
-          <form className="form-grid" onSubmit={handleLogin}>
+          <form className="form-grid auth-form-grid" onSubmit={handleLogin}>
             <label>
               Email
               <input
@@ -344,19 +352,21 @@ export default function AuthPage() {
                 placeholder="Password@1"
               />
             </label>
-            <div className="auth-inline-actions">
-              <p className="auth-note">Login requires the same strong password format enforced by the backend.</p>
-              <button type="button" className="link-button" onClick={() => {
-                setResetForm((current) => ({ ...current, email: loginForm.email.trim() }));
-                switchMode("reset");
-              }}>
-                Forgot password?
-              </button>
-            </div>
-            <button className="primary-button auth-submit" disabled={loading}>{loading ? "Signing in..." : "Login"}</button>
+            <p className="auth-note auth-note-soft">{adminMode ? "Only platform admin accounts can continue from this screen." : "Use the same password format enforced by the backend so login and signup stay consistent."}</p>
+            <button className="primary-button auth-submit" disabled={loading}>{loading ? "Signing in..." : adminMode ? "Login as Admin" : "Login"}</button>
+            {adminMode ? null : (
+              <>
+                <div className="auth-divider">
+                  <span>or</span>
+                </div>
+                <button type="button" className="google-button" onClick={handleGoogleLogin} disabled={loading}>
+                  Continue with Google
+                </button>
+              </>
+            )}
           </form>
-        ) : mode === "signup" ? (
-          <form className="form-grid" onSubmit={handleSignup}>
+        ) : (
+          <form className="form-grid auth-form-grid" onSubmit={handleSignup}>
             <label>
               Full Name
               <input value={signupForm.fullName} onChange={(event) => setSignupForm((current) => ({ ...current, fullName: event.target.value }))} placeholder="Devar Sharma" />
@@ -365,9 +375,9 @@ export default function AuthPage() {
               Email
               <input value={signupForm.email} onChange={(event) => setSignupForm((current) => ({ ...current, email: event.target.value }))} placeholder="you@example.com" />
             </label>
-            <div className="auth-inline-actions">
-              <p className="auth-note">Verify the email with OTP before the account can be created.</p>
-              <button type="button" className="link-button" onClick={handleSendSignupOtp} disabled={loading}>
+            <div className="otp-request-row">
+              <p className="auth-note auth-note-soft">Send the OTP first, then enter it below to finish creating the account.</p>
+              <button type="button" className="secondary-button otp-button" onClick={handleSendSignupOtp} disabled={loading}>
                 {loading ? "Sending OTP..." : "Send Signup OTP"}
               </button>
             </div>
@@ -379,51 +389,19 @@ export default function AuthPage() {
               Signup OTP
               <input value={signupForm.otp} onChange={(event) => setSignupForm((current) => ({ ...current, otp: event.target.value }))} placeholder="6 character OTP" />
             </label>
-            <p className="auth-note">Use Send Signup OTP first. After verification, this form will create the account and you can log in immediately.</p>
-            <p className="auth-note">Use a password like `Password@1`. It must include uppercase, lowercase, number, special character, and minimum 8 characters.</p>
+            <p className="auth-note auth-note-soft">Password must include uppercase, lowercase, number, special character, and at least 8 characters.</p>
             <button className="primary-button auth-submit" disabled={loading}>{loading ? "Creating account..." : "Create account"}</button>
           </form>
-        ) : (
-          <div className="form-grid">
-            <form className="form-grid" onSubmit={handleSendOtp}>
-              <label>
-                Registered Email
-                <input
-                  type="email"
-                  value={resetForm.email}
-                  onChange={(event) => setResetForm((current) => ({ ...current, email: event.target.value }))}
-                  placeholder="you@example.com"
-                />
-              </label>
-              <button className="secondary-button auth-submit" disabled={loading}>{loading ? "Sending OTP..." : "Send OTP"}</button>
-            </form>
-
-            <form className="form-grid" onSubmit={handleResetPassword}>
-              <label>
-                OTP
-                <input
-                  value={resetForm.otp}
-                  onChange={(event) => setResetForm((current) => ({ ...current, otp: event.target.value }))}
-                  placeholder="6 character OTP"
-                />
-              </label>
-              <label>
-                New Password
-                <input
-                  type="password"
-                  value={resetForm.newPassword}
-                  onChange={(event) => setResetForm((current) => ({ ...current, newPassword: event.target.value }))}
-                  placeholder="NewPassword@1"
-                />
-              </label>
-              <p className="auth-note">Use Send OTP first. In local development, the OTP will also be shown on this page if email delivery is not working.</p>
-              <button className="primary-button auth-submit" disabled={loading}>{loading ? "Updating password..." : "Reset Password"}</button>
-            </form>
-          </div>
         )}
 
+        <div className="auth-note auth-note-soft" style={{ marginTop: 16 }}>
+          {adminMode ? <Link to="/auth">Back to user login</Link> : <Link to="/admin/login">Admin login</Link>}
+        </div>
+
         {feedback.text ? <p className={`feedback ${feedback.type === "success" ? "feedback-success" : "feedback-error"}`}>{feedback.text}</p> : null}
-      </div>
+      </section>
     </div>
   );
 }
+
+
