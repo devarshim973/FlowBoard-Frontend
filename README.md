@@ -204,10 +204,10 @@ This frontend fits especially well with services such as:
 
 ---
 
-## Author Note
+## Author 
 
-This README was designed to be visually strong on GitHub while still staying practical for developers who need to run,
-understand, and extend the project quickly.
+Devarshi Mishra
+
 
 <div align="center">
   <sub>Built for FlowBoard frontend delivery and presentation.</sub>
