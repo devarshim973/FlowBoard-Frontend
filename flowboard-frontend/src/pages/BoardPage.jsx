@@ -4,7 +4,7 @@ import BoardColumn from "../components/BoardColumn";
 import Modal from "../components/Modal";
 import Shell from "../components/Shell";
 import { boardApi, cardApi, commentApi, listApi, notificationApi } from "../services/api";
-import { getCardId, getListId, groupCardsByList, unwrapItems, unwrapSingleItem } from "../services/helpers";
+import { formatDate, getCardId, getListId, groupCardsByList, unwrapItems, unwrapSingleItem } from "../services/helpers";
 import { useAuth } from "../state/AuthContext";
 
 const nextStatusMap = {
@@ -27,10 +27,44 @@ export default function BoardPage() {
   const [listModalOpen, setListModalOpen] = useState(false);
   const [cardModalState, setCardModalState] = useState({ open: false, listId: "" });
   const [editCardModalState, setEditCardModalState] = useState({ open: false, card: null });
+  const [commentModalState, setCommentModalState] = useState({ open: false, card: null });
   const [listForm, setListForm] = useState({ name: "", color: "#0ea5e9" });
   const [cardForm, setCardForm] = useState({ listId: "", title: "", description: "", priority: "LOW", status: "TO_DO", dueDate: "" });
   const [editCardForm, setEditCardForm] = useState({ title: "", description: "", priority: "LOW", status: "TO_DO", dueDate: "" });
+  const [commentForm, setCommentForm] = useState({ content: "" });
   const [draggedCard, setDraggedCard] = useState(null);
+
+  async function loadBoardComments(nextCards) {
+    if (!nextCards.length) {
+      setComments([]);
+      return;
+    }
+
+    const commentSnapshots = await Promise.all(
+      nextCards.map((card) =>
+        commentApi.getByCard(getCardId(card), token, userId).catch(() => ({ content: [] }))
+      )
+    );
+
+    const cardTitlesById = new Map(
+      nextCards.map((card) => [String(getCardId(card)), card.title || "Untitled card"])
+    );
+
+    const nextComments = commentSnapshots
+      .flatMap((item) => unwrapItems(item))
+      .map((comment) => ({
+        ...comment,
+        cardTitle: cardTitlesById.get(String(comment.cardId)) || "Untitled card"
+      }))
+      .sort((left, right) => {
+        const leftTime = new Date(left.updatedAt || left.createdAt || 0).getTime();
+        const rightTime = new Date(right.updatedAt || right.createdAt || 0).getTime();
+        return rightTime - leftTime;
+      })
+      .slice(0, 8);
+
+    setComments(nextComments);
+  }
 
   useEffect(() => {
     if (!token || !userId) return;
@@ -74,13 +108,11 @@ export default function BoardPage() {
         errors.push(`Alerts: ${unreadResult.reason?.message || "Failed to load"}`);
       }
 
-      if (nextCards.length) {
-        const commentSnapshots = await Promise.all(
-          nextCards.slice(0, 4).map((card) => commentApi.getByCard(getCardId(card), token, userId).catch(() => ({ content: [] })))
-        );
-        setComments(commentSnapshots.flatMap((item) => unwrapItems(item)));
-      } else {
+      try {
+        await loadBoardComments(nextCards);
+      } catch (error) {
         setComments([]);
+        errors.push(`Comments: ${error.message || "Failed to load"}`);
       }
 
       setMessage(errors.join(" | "));
@@ -88,6 +120,18 @@ export default function BoardPage() {
 
     loadBoard();
   }, [boardId, token, userId]);
+
+  useEffect(() => {
+    if (!token || !userId || !cards.length) return;
+
+    const refreshComments = setInterval(() => {
+      loadBoardComments(cards).catch(() => {
+        // Keep the current board story visible if a background refresh fails.
+      });
+    }, 15000);
+
+    return () => clearInterval(refreshComments);
+  }, [cards, token, userId]);
 
   const groupedLists = useMemo(() => groupCardsByList(lists, cards), [lists, cards]);
 
@@ -187,6 +231,11 @@ export default function BoardPage() {
     });
   }
 
+  function handleAddComment(card) {
+    setCommentModalState({ open: true, card });
+    setCommentForm({ content: "" });
+  }
+
   async function handleDeleteCard(card) {
     if (!confirm("Are you sure you want to delete this card?")) return;
     try {
@@ -241,6 +290,48 @@ export default function BoardPage() {
     }
   }
 
+  async function createComment(event) {
+    event.preventDefault();
+    const selectedCard = commentModalState.card;
+    const cardId = getCardId(selectedCard);
+
+    if (!cardId) {
+      setMessage("Select a valid card before adding a comment.");
+      return;
+    }
+
+    if (!commentForm.content.trim()) {
+      setMessage("Comment text is required.");
+      return;
+    }
+
+    try {
+      const created = await commentApi.create({
+        cardId,
+        authorId: Number(userId),
+        content: commentForm.content.trim()
+      }, token, userId);
+
+      setComments((current) => [
+        {
+          ...created,
+          cardTitle: selectedCard?.title || "Untitled card"
+        },
+        ...current
+      ].sort((left, right) => {
+        const leftTime = new Date(left.updatedAt || left.createdAt || 0).getTime();
+        const rightTime = new Date(right.updatedAt || right.createdAt || 0).getTime();
+        return rightTime - leftTime;
+      }).slice(0, 8));
+
+      setCommentModalState({ open: false, card: null });
+      setCommentForm({ content: "" });
+      setMessage("");
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
   return (
     <Shell
       title={board?.name || "Board Surface"}
@@ -262,7 +353,7 @@ export default function BoardPage() {
               const listId = getListId(selectedList);
               setCardModalState({ open: true, listId });
               setCardForm((current) => ({ ...current, listId }));
-            }} onQuickStatus={quickStatus} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onEditCard={handleEditCard} onDeleteCard={handleDeleteCard} onDeleteList={handleDeleteList} />
+            }} onQuickStatus={quickStatus} onDragStart={handleDragStart} onDrop={handleDrop} onDragOver={handleDragOver} onEditCard={handleEditCard} onDeleteCard={handleDeleteCard} onDeleteList={handleDeleteList} onAddComment={handleAddComment} />
           ))}
         </div>
 
@@ -276,12 +367,13 @@ export default function BoardPage() {
             </div>
             <div className="timeline-list">
               {comments.length ? comments.map((comment) => (
-                <article key={comment.id} className="timeline-row">
+                <article key={comment.commentId ?? comment.id} className="timeline-row">
                   <div className="timeline-dot" />
                   <div>
-                    <h4>{comment.authorName || "Team comment"}</h4>
+                    <h4>{comment.cardTitle || "Card comment"}</h4>
                     <p>{comment.content || comment.message || "Comment activity captured."}</p>
                   </div>
+                  <span>{formatDate(comment.updatedAt || comment.createdAt)}</span>
                 </article>
               )) : (
                 <div className="empty-panel">
@@ -380,6 +472,23 @@ export default function BoardPage() {
             <input type="date" value={editCardForm.dueDate} onChange={(event) => setEditCardForm((current) => ({ ...current, dueDate: event.target.value }))} />
           </label>
           <button className="primary-button">Update card</button>
+        </form>
+      </Modal>
+
+      <Modal open={commentModalState.open} title="Add comment" onClose={() => setCommentModalState({ open: false, card: null })}>
+        <form className="form-grid" onSubmit={createComment}>
+          <div className="modal-inline-note">
+            Commenting on <strong>{commentModalState.card?.title || "selected card"}</strong>
+          </div>
+          <label>
+            Comment
+            <textarea
+              value={commentForm.content}
+              onChange={(event) => setCommentForm((current) => ({ ...current, content: event.target.value }))}
+              placeholder="Write your comment here"
+            />
+          </label>
+          <button className="primary-button">Add comment</button>
         </form>
       </Modal>
     </Shell>
