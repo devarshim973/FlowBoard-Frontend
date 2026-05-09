@@ -1,8 +1,8 @@
 # <div align="center">FlowBoard Frontend</div>
 
-<div align="center">
-  <img src="https://readme-typing-svg.herokuapp.com?font=Fira+Code&size=24&duration=2800&pause=900&color=22C55E&center=true&vCenter=true&width=900&lines=Modern+task+orchestration+UI;React+%2B+Vite+frontend+for+FlowBoard;Boards%2C+workspaces%2C+cards%2C+comments+and+notifications" alt="FlowBoard typing banner" />
-</div>
+<p align="center">
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f172a,35:14532d,70:22c55e,100:4ade80&height=220&section=header&text=FlowBoard%20Frontend&fontSize=42&fontColor=ffffff&animation=fadeIn&fontAlignY=38&desc=React%20%2B%20Vite%20Task%20Orchestration%20UI&descAlignY=58&descSize=18" alt="FlowBoard Frontend banner" />
+</p>
 
 <div align="center">
   <img src="https://img.shields.io/badge/React-18.3.1-0f172a?style=for-the-badge&logo=react&logoColor=61dafb" alt="React badge" />
@@ -12,9 +12,8 @@
 </div>
 
 <p align="center">
-  FlowBoard is a Trello-inspired frontend built for workspace-based planning, board collaboration, card movement,
-  comments, notifications, authentication, and admin operations. It is designed to sit on top of a microservices backend
-  while still feeling like one smooth product.
+  A polished frontend for FlowBoard, built with React and Vite to deliver authentication, workspace management,
+  boards, lists, cards, comments, notifications, and admin-facing flows in one smooth product experience.
 </p>
 
 ---
