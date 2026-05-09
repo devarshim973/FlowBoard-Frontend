@@ -226,6 +226,9 @@ export const notificationApi = {
   unreadCount(recipientId, token, userId) {
     return apiRequest(`/api/v1/notifications/recipient/unread-count/${recipientId}`, { token, userId });
   },
+  markRead(notificationId, token, userId) {
+    return apiRequest(`/api/v1/notifications/read/${notificationId}`, { method: "PUT", token, userId });
+  },
   markAllRead(recipientId, token, userId) {
     return apiRequest(`/api/v1/notifications/readAll/${recipientId}`, { method: "PUT", token, userId });
   }
