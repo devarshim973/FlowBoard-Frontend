@@ -1,3 +1,5 @@
+# <div align="center">FlowBoard Frontend</div>
+
 <p align="center">
   <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f172a,35:14532d,70:22c55e,100:4ade80&height=220&section=header&text=FlowBoard%20Frontend&fontSize=42&fontColor=ffffff&animation=fadeIn&fontAlignY=38&desc=React%20%2B%20Vite%20Task%20Orchestration%20UI&descAlignY=58&descSize=18" alt="FlowBoard Frontend banner" />
 </p>
@@ -201,10 +203,10 @@ This frontend fits especially well with services such as:
 
 ---
 
-## Author Note
+## Author 
 
-This README was designed to be visually strong on GitHub while still staying practical for developers who need to run,
-understand, and extend the project quickly.
+Devarshi Mishra
+
 
 <div align="center">
   <sub>Built for FlowBoard frontend delivery and presentation.</sub>

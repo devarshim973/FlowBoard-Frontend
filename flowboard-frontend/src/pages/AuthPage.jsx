@@ -16,7 +16,13 @@ const initialLogin = {
   password: ""
 };
 
-const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+const initialForgotPassword = {
+  email: "",
+  otp: "",
+  newPassword: ""
+};
+
+const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[#@$!%*?&])[A-Za-z\d@$#!%*?&]{8,}$/;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const THEME_STORAGE_KEY = "flowboard-theme";
 
@@ -78,6 +84,7 @@ export default function AuthPage({ adminMode = false }) {
   const [theme, setTheme] = useState(getInitialTheme);
   const [signupForm, setSignupForm] = useState(initialSignup);
   const [loginForm, setLoginForm] = useState(initialLogin);
+  const [forgotPasswordForm, setForgotPasswordForm] = useState(initialForgotPassword);
   const [feedback, setFeedback] = useState({ type: "", text: "" });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -99,6 +106,7 @@ export default function AuthPage({ adminMode = false }) {
   const activeTitle = useMemo(() => {
     if (adminMode) return "Sign in to manage users and platform-wide content";
     if (mode === "signup") return "Create an account that feels ready on day one";
+    if (mode === "forgot-password") return "Reset your password with the OTP sent to your email";
     return "Sign in and continue building with your team";
   }, [adminMode, mode]);
 
@@ -159,6 +167,30 @@ export default function AuthPage({ adminMode = false }) {
   function validateSignupOtpRequest() {
     if (!emailPattern.test(signupForm.email.trim())) {
       return "Enter a valid email address before requesting OTP.";
+    }
+
+    return "";
+  }
+
+  function validateForgotPasswordOtpRequest() {
+    if (!emailPattern.test(forgotPasswordForm.email.trim())) {
+      return "Enter a valid email address before requesting the reset OTP.";
+    }
+
+    return "";
+  }
+
+  function validateForgotPasswordForm() {
+    if (!emailPattern.test(forgotPasswordForm.email.trim())) {
+      return "Enter a valid email address.";
+    }
+
+    if (forgotPasswordForm.otp.trim().length !== 6) {
+      return "Enter the 6 character OTP sent to your email.";
+    }
+
+    if (!passwordPattern.test(forgotPasswordForm.newPassword)) {
+      return "New password must contain uppercase, lowercase, number, special character, and be at least 8 characters.";
     }
 
     return "";
@@ -263,6 +295,59 @@ export default function AuthPage({ adminMode = false }) {
     }
   }
 
+  async function handleSendForgotPasswordOtp() {
+    const validationMessage = validateForgotPasswordOtpRequest();
+
+    if (validationMessage) {
+      setFeedbackMessage("error", validationMessage);
+      return;
+    }
+
+    setLoading(true);
+    setFeedbackMessage("", "");
+    try {
+      await authApi.sendOtp(forgotPasswordForm.email.trim());
+      setFeedbackMessage("success", "Reset OTP sent to your email. Enter it below with your new password.");
+    } catch (error) {
+      setFeedbackMessage("error", formatAuthError(error.message));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleForgotPassword(event) {
+    event.preventDefault();
+    const validationMessage = validateForgotPasswordForm();
+
+    if (validationMessage) {
+      setFeedbackMessage("error", validationMessage);
+      return;
+    }
+
+    setLoading(true);
+    setFeedbackMessage("", "");
+    try {
+      const payload = {
+        email: forgotPasswordForm.email.trim(),
+        otp: forgotPasswordForm.otp.trim(),
+        newPassword: forgotPasswordForm.newPassword
+      };
+
+      await authApi.resetPassword(payload);
+      setLoginForm({
+        email: payload.email,
+        password: ""
+      });
+      setForgotPasswordForm(initialForgotPassword);
+      setMode("login");
+      setFeedbackMessage("success", "Password changed successfully. Please log in with your new password.");
+    } catch (error) {
+      setFeedbackMessage("error", formatAuthError(error.message));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   if (isAuthenticated) {
     return <Navigate to={role === "PLATFORM_ADMIN" || role === "ADMIN" ? "/app/admin" : "/app"} replace />;
   }
@@ -317,7 +402,15 @@ export default function AuthPage({ adminMode = false }) {
       <section className="auth-panel form-panel auth-card auth-card-modern">
         <div className="auth-header auth-header-modern">
           <p className="eyebrow">{adminMode ? "Admin Panel" : "Welcome Back"}</p>
-          <h2>{adminMode ? "Login to the admin panel" : mode === "signup" ? "Create your FlowBoard account" : "Login to your workspace"}</h2>
+          <h2>
+            {adminMode
+              ? "Login to the admin panel"
+              : mode === "signup"
+                ? "Create your FlowBoard account"
+                : mode === "forgot-password"
+                  ? "Reset your password"
+                  : "Login to your workspace"}
+          </h2>
           <p className="auth-subtitle">{activeTitle}</p>
         </div>
 
@@ -352,6 +445,20 @@ export default function AuthPage({ adminMode = false }) {
                 placeholder="Password@1"
               />
             </label>
+            {adminMode ? null : (
+              <div className="auth-inline-actions">
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => {
+                    setForgotPasswordForm((current) => ({ ...current, email: loginForm.email.trim() }));
+                    switchMode("forgot-password");
+                  }}
+                >
+                  Forgot password?
+                </button>
+              </div>
+            )}
             <p className="auth-note auth-note-soft">{adminMode ? "Only platform admin accounts can continue from this screen." : "Use the same password format enforced by the backend so login and signup stay consistent."}</p>
             <button className="primary-button auth-submit" disabled={loading}>{loading ? "Signing in..." : adminMode ? "Login as Admin" : "Login"}</button>
             {adminMode ? null : (
@@ -365,7 +472,7 @@ export default function AuthPage({ adminMode = false }) {
               </>
             )}
           </form>
-        ) : (
+        ) : mode === "signup" ? (
           <form className="form-grid auth-form-grid" onSubmit={handleSignup}>
             <label>
               Full Name
@@ -391,6 +498,48 @@ export default function AuthPage({ adminMode = false }) {
             </label>
             <p className="auth-note auth-note-soft">Password must include uppercase, lowercase, number, special character, and at least 8 characters.</p>
             <button className="primary-button auth-submit" disabled={loading}>{loading ? "Creating account..." : "Create account"}</button>
+          </form>
+        ) : (
+          <form className="form-grid auth-form-grid" onSubmit={handleForgotPassword}>
+            <label>
+              Email
+              <input
+                type="email"
+                value={forgotPasswordForm.email}
+                onChange={(event) => setForgotPasswordForm((current) => ({ ...current, email: event.target.value }))}
+                placeholder="you@example.com"
+              />
+            </label>
+            <div className="otp-request-row">
+              <p className="auth-note auth-note-soft">Send the reset OTP first, then enter the OTP and your new password below.</p>
+              <button type="button" className="secondary-button otp-button" onClick={handleSendForgotPasswordOtp} disabled={loading}>
+                {loading ? "Sending OTP..." : "Send Reset OTP"}
+              </button>
+            </div>
+            <label>
+              Reset OTP
+              <input
+                value={forgotPasswordForm.otp}
+                onChange={(event) => setForgotPasswordForm((current) => ({ ...current, otp: event.target.value }))}
+                placeholder="6 character OTP"
+              />
+            </label>
+            <label>
+              New Password
+              <input
+                type="password"
+                value={forgotPasswordForm.newPassword}
+                onChange={(event) => setForgotPasswordForm((current) => ({ ...current, newPassword: event.target.value }))}
+                placeholder="NewPassword@1"
+              />
+            </label>
+            <div className="auth-inline-actions">
+              <button type="button" className="link-button" onClick={() => switchMode("login")}>
+                Back to login
+              </button>
+            </div>
+            <p className="auth-note auth-note-soft">New password must include uppercase, lowercase, number, special character, and at least 8 characters.</p>
+            <button className="primary-button auth-submit" disabled={loading}>{loading ? "Updating password..." : "Reset password"}</button>
           </form>
         )}
 

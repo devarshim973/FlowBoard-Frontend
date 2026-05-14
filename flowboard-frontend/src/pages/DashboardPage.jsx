@@ -5,9 +5,95 @@ import Modal from "../components/Modal";
 import NotificationPanel from "../components/NotificationPanel";
 import Shell from "../components/Shell";
 import WorkspaceCard from "../components/WorkspaceCard";
-import { boardApi, notificationApi, paymentApi, workspaceApi } from "../services/api";
-import { getWorkspaceId, unwrapItems } from "../services/helpers";
+import { boardApi, cardApi, notificationApi, paymentApi, workspaceApi } from "../services/api";
+import { formatDate, getBoardId, getWorkspaceId, unwrapItems } from "../services/helpers";
 import { useAuth } from "../state/AuthContext";
+
+const DISMISSED_DUE_REMINDERS_KEY = "flowboard-dismissed-due-reminders";
+
+function startOfDay(date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function readDismissedDueReminderIds() {
+  try {
+    const stored = window.localStorage.getItem(DISMISSED_DUE_REMINDERS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeDismissedDueReminderIds(ids) {
+  try {
+    window.localStorage.setItem(DISMISSED_DUE_REMINDERS_KEY, JSON.stringify(ids));
+  } catch {
+    // Ignore storage issues and keep the reminder dismissed for the current session only.
+  }
+}
+
+function buildDueDateReminder(card, board) {
+  if (!card?.dueDate || card.status === "DONE") {
+    return null;
+  }
+
+  const dueDate = new Date(card.dueDate);
+  if (Number.isNaN(dueDate.getTime())) {
+    return null;
+  }
+
+  const today = startOfDay(new Date());
+  const dueDay = startOfDay(dueDate);
+  const dayDifference = Math.round((dueDay.getTime() - today.getTime()) / 86400000);
+
+  let title = "";
+  let message = "";
+
+  if (dayDifference < 0) {
+    title = "Overdue task";
+    message = `"${card.title || "Untitled card"}" was due on ${formatDate(card.dueDate)}${board?.name ? ` in ${board.name}` : ""}.`;
+  } else if (dayDifference === 0) {
+    title = "Due today";
+    message = `"${card.title || "Untitled card"}" is due today${board?.name ? ` in ${board.name}` : ""}.`;
+  } else if (dayDifference === 1) {
+    title = "Due tomorrow";
+    message = `"${card.title || "Untitled card"}" is due tomorrow (${formatDate(card.dueDate)})${board?.name ? ` in ${board.name}` : ""}.`;
+  } else if (dayDifference <= 3) {
+    title = "Upcoming due date";
+    message = `"${card.title || "Untitled card"}" is due on ${formatDate(card.dueDate)}${board?.name ? ` in ${board.name}` : ""}.`;
+  } else {
+    return null;
+  }
+
+  return {
+    notificationId: `due-${card.cardId ?? card.id}`,
+    notificationType: "DUE_DATE",
+    title,
+    message,
+    createdAt: card.dueDate,
+    isRead: false,
+    source: "due-date-reminder"
+  };
+}
+
+function mergeNotifications(baseNotifications, reminders) {
+  const mapped = new Map();
+
+  [...reminders, ...baseNotifications].forEach((item) => {
+    const key = item.notificationId ?? item.id ?? `${item.notificationType}-${item.createdAt}-${item.message}`;
+    if (!mapped.has(key)) {
+      mapped.set(key, item);
+    }
+  });
+
+  return Array.from(mapped.values()).sort((left, right) => {
+    const leftTime = new Date(left.createdAt || left.updatedAt || 0).getTime();
+    const rightTime = new Date(right.createdAt || right.updatedAt || 0).getTime();
+    return rightTime - leftTime;
+  });
+}
 
 export default function DashboardPage() {
   const FREE_WORKSPACE_LIMIT = 3;
@@ -43,6 +129,7 @@ export default function DashboardPage() {
       if (!token || !userId) return;
 
       const errors = [];
+      const dismissedDueReminderIds = new Set(readDismissedDueReminderIds());
 
       try {
         const workspaceResponse = await workspaceApi.getMine(token, userId);
@@ -50,29 +137,49 @@ export default function DashboardPage() {
         setWorkspaces(nextWorkspaces);
 
         const groupedBoards = {};
+        const dueDateReminders = [];
         for (const workspace of nextWorkspaces) {
           const workspaceId = getWorkspaceId(workspace);
           try {
             const privateBoards = await boardApi.getPrivate(workspaceId, token, userId);
-            groupedBoards[workspaceId] = unwrapItems(privateBoards);
+            const boards = unwrapItems(privateBoards);
+            groupedBoards[workspaceId] = boards;
+
+            for (const board of boards) {
+              const boardId = getBoardId(board);
+              if (!boardId) continue;
+
+              try {
+                const cards = unwrapItems(await cardApi.getByBoard(boardId, token, userId));
+                cards
+                  .map((card) => buildDueDateReminder(card, board))
+                  .filter(Boolean)
+                  .filter((item) => !dismissedDueReminderIds.has(String(item.notificationId)))
+                  .forEach((item) => dueDateReminders.push(item));
+              } catch (error) {
+                errors.push(`Cards for board ${board.name || boardId}: ${error.message}`);
+              }
+            }
           } catch (error) {
             groupedBoards[workspaceId] = [];
             errors.push(`Boards for workspace ${workspace.name || workspaceId}: ${error.message}`);
           }
         }
         setBoardsByWorkspace(groupedBoards);
+
+        try {
+          const notificationResponse = await notificationApi.getByRecipient(userId, token, userId);
+          const backendNotifications = unwrapItems(notificationResponse);
+          setNotifications(mergeNotifications(backendNotifications, dueDateReminders));
+        } catch (error) {
+          setNotifications(mergeNotifications([], dueDateReminders));
+          errors.push(`Notifications: ${error.message}`);
+        }
       } catch (error) {
         setWorkspaces([]);
         setBoardsByWorkspace({});
-        errors.push(`Workspaces: ${error.message}`);
-      }
-
-      try {
-        const notificationResponse = await notificationApi.getByRecipient(userId, token, userId);
-        setNotifications(unwrapItems(notificationResponse));
-      } catch (error) {
         setNotifications([]);
-        errors.push(`Notifications: ${error.message}`);
+        errors.push(`Workspaces: ${error.message}`);
       }
 
       try {
@@ -230,7 +337,36 @@ export default function DashboardPage() {
     try {
       await notificationApi.markAllRead(userId, token, userId);
       setNotificationCount(0);
-      setNotifications((current) => current.map((item) => ({ ...item, isRead: true, read: true })));
+      setNotifications([]);
+      writeDismissedDueReminderIds(
+        notifications
+          .filter((item) => item.source === "due-date-reminder")
+          .map((item) => String(item.notificationId))
+      );
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function handleNotificationClick(notification) {
+    const notificationId = notification.notificationId ?? notification.id;
+
+    try {
+      if (notification.source === "due-date-reminder") {
+        const dismissedIds = Array.from(new Set([
+          ...readDismissedDueReminderIds(),
+          String(notificationId)
+        ]));
+        writeDismissedDueReminderIds(dismissedIds);
+      } else if (notificationId) {
+        await notificationApi.markRead(notificationId, token, userId);
+        setNotificationCount((current) => Math.max(0, current - 1));
+      }
+
+      setNotifications((current) =>
+        current.filter((item) => (item.notificationId ?? item.id) !== notificationId)
+      );
+      setMessage("");
     } catch (error) {
       setMessage(error.message);
     }
@@ -456,7 +592,7 @@ export default function DashboardPage() {
           </section>
         </div>
 
-        <NotificationPanel notifications={notifications} onMarkAll={markAllRead} />
+        <NotificationPanel notifications={notifications} onMarkAll={markAllRead} onNotificationClick={handleNotificationClick} />
       </div>
 
       <Modal open={workspaceModalOpen} title="Create workspace" onClose={() => setWorkspaceModalOpen(false)}>
