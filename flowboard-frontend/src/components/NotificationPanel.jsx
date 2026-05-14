@@ -1,6 +1,6 @@
 import { formatDate } from "../services/helpers";
 
-export default function NotificationPanel({ notifications, onMarkAll }) {
+export default function NotificationPanel({ notifications, onMarkAll, onNotificationClick }) {
   return (
     <section className="panel notification-panel" id="notifications">
       <div className="panel-head">
@@ -16,7 +16,19 @@ export default function NotificationPanel({ notifications, onMarkAll }) {
       <div className="notification-list">
         {notifications.length ? (
           notifications.map((item) => (
-            <article key={item.notificationId ?? item.id} className="notification-row">
+            <article
+              key={item.notificationId ?? item.id}
+              className="notification-row"
+              onClick={() => onNotificationClick?.(item)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onNotificationClick?.(item);
+                }
+              }}
+            >
               <div className={`dot ${item.isRead || item.read ? "read" : "unread"}`} />
               <div>
                 <h4>{item.title || item.notificationType || item.type || "Notification"}</h4>
