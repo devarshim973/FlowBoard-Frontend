@@ -1,6 +1,22 @@
 import { decodeJwt } from "./helpers";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const LOCALHOST_PATTERN = /^(localhost|127\.0\.0\.1)$/i;
+
+function buildRequestUrl(path, query, baseUrl = API_BASE_URL) {
+  const requestUrl = baseUrl ? `${baseUrl}${path}` : path;
+  const url = new URL(requestUrl, window.location.origin);
+
+  if (query) {
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        url.searchParams.set(key, value);
+      }
+    });
+  }
+
+  return url;
+}
 
 function extractErrorMessage(body) {
   if (typeof body === "string") {
@@ -36,17 +52,8 @@ async function parseResponse(response) {
 
 export async function apiRequest(path, options = {}) {
   const { token, userId, role, headers = {}, body, query } = options;
-  const requestUrl = API_BASE_URL ? `${API_BASE_URL}${path}` : path;
-  const url = new URL(requestUrl, window.location.origin);
+  const url = buildRequestUrl(path, query);
   const resolvedRole = role || (token ? decodeJwt(token).role : "");
-
-  if (query) {
-    Object.entries(query).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== "") {
-        url.searchParams.set(key, value);
-      }
-    });
-  }
 
   const requestHeaders = {
     ...(body instanceof FormData ? {} : { "Content-Type": "application/json" }),
@@ -66,10 +73,24 @@ export async function apiRequest(path, options = {}) {
     });
   } catch (error) {
     if (error instanceof TypeError) {
-      throw new Error(`Request failed for ${path}. Check that the matching backend service is running.`);
-    }
+      const canRetryViaDevProxy =
+        API_BASE_URL &&
+        LOCALHOST_PATTERN.test(window.location.hostname) &&
+        LOCALHOST_PATTERN.test(url.hostname) &&
+        url.origin !== window.location.origin;
 
-    throw error;
+      if (canRetryViaDevProxy) {
+        response = await fetch(buildRequestUrl(path, query).toString(), {
+          method: options.method || "GET",
+          headers: requestHeaders,
+          body: body instanceof FormData ? body : body !== undefined ? JSON.stringify(body) : undefined
+        });
+      } else {
+        throw new Error(`Request failed for ${path}. Check that the matching backend service is running.`);
+      }
+    } else {
+      throw error;
+    }
   }
 
   return parseResponse(response);
