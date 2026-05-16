@@ -240,6 +240,32 @@ export const commentApi = {
   },
   create(payload, token, userId) {
     return apiRequest("/api/v1/comments/add", { method: "POST", token, userId, body: payload });
+  },
+  update(commentId, content, token, userId) {
+    return apiRequest("/api/v1/comments/update", {
+      method: "PATCH",
+      token,
+      userId,
+      body: { commentId, content }
+    });
+  },
+  delete(commentId, token, userId) {
+    return apiRequest(`/api/v1/comments/delete/${commentId}`, {
+      method: "DELETE",
+      token,
+      userId
+    });
+  }
+};
+
+export const attachmentApi = {
+  uploadForComment({ file, cardId, commentId, uploaderId }, token, userId) {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("cardId", String(cardId));
+    formData.append("commentId", String(commentId));
+    formData.append("uploaderId", String(uploaderId));
+    return apiRequest("/api/v1/attachments/upload", { method: "POST", token, userId, body: formData });
   }
 };
 

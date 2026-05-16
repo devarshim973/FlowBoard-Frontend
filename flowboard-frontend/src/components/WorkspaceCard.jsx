@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { getBoardId, getWorkspaceId } from "../services/helpers";
 
-export default function WorkspaceCard({ workspace, boards, onCreateBoard, onDeleteWorkspace, onDeleteBoard }) {
+export default function WorkspaceCard({ workspace, boards, onCreateBoard, onEditWorkspace, onEditBoard, onDeleteWorkspace, onDeleteBoard }) {
   const workspaceId = getWorkspaceId(workspace);
 
   return (
@@ -15,6 +15,9 @@ export default function WorkspaceCard({ workspace, boards, onCreateBoard, onDele
         <div className="inline-actions">
           <button className="secondary-button" onClick={() => onCreateBoard(workspaceId)}>
             New board
+          </button>
+          <button className="secondary-button" onClick={() => onEditWorkspace(workspace)}>
+            Edit workspace
           </button>
           <button className="danger-button" onClick={() => onDeleteWorkspace(workspace)}>
             Delete workspace
@@ -36,6 +39,9 @@ export default function WorkspaceCard({ workspace, boards, onCreateBoard, onDele
                   <Link to={`/app/board/${boardId}`} className="secondary-button board-open-button">
                     Open board
                   </Link>
+                  <button className="secondary-button" onClick={() => onEditBoard(board, workspaceId)}>
+                    Edit board
+                  </button>
                   <button className="danger-button" onClick={() => onDeleteBoard(board, workspaceId)}>
                     Delete board
                   </button>

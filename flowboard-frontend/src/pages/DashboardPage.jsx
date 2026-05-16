@@ -103,7 +103,8 @@ export default function DashboardPage() {
   const [notifications, setNotifications] = useState([]);
   const [notificationCount, setNotificationCount] = useState(0);
   const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false);
-  const [boardModalState, setBoardModalState] = useState({ open: false, workspaceId: "" });
+  const [editingWorkspaceId, setEditingWorkspaceId] = useState(null);
+  const [boardModalState, setBoardModalState] = useState({ open: false, workspaceId: "", boardId: null });
   const [workspaceForm, setWorkspaceForm] = useState({ name: "", description: "", visibility: "PRIVATE", logoUrl: "https://placehold.co/120x120/png" });
   const [boardForm, setBoardForm] = useState({ workspaceId: "", name: "", description: "", visibility: "PRIVATE", background: "#0ea5e9" });
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
@@ -230,8 +231,20 @@ export default function DashboardPage() {
     setWorkspaces((current) => [created, ...current]);
     setBoardsByWorkspace((current) => ({ ...current, [workspaceId]: [] }));
     setWorkspaceModalOpen(false);
+    setEditingWorkspaceId(null);
     setWorkspaceForm({ name: "", description: "", visibility: "PRIVATE", logoUrl: "https://placehold.co/120x120/png" });
     return created;
+  }
+
+  async function updateWorkspace(payload) {
+    const updated = await workspaceApi.update(editingWorkspaceId, payload, token, userId);
+    setWorkspaces((current) =>
+      current.map((item) => (getWorkspaceId(item) === editingWorkspaceId ? updated : item))
+    );
+    setWorkspaceModalOpen(false);
+    setEditingWorkspaceId(null);
+    setWorkspaceForm({ name: "", description: "", visibility: "PRIVATE", logoUrl: "https://placehold.co/120x120/png" });
+    return updated;
   }
 
   async function startWorkspaceUpgrade(pendingWorkspace = null) {
@@ -299,6 +312,16 @@ export default function DashboardPage() {
   async function createWorkspace(event) {
     event.preventDefault();
 
+    if (editingWorkspaceId) {
+      try {
+        await updateWorkspace(workspaceForm);
+        setMessage("");
+      } catch (error) {
+        setMessage(error.message);
+      }
+      return;
+    }
+
     if (requiresWorkspaceUpgrade) {
       await startWorkspaceUpgrade({ ...workspaceForm });
       return;
@@ -319,18 +342,56 @@ export default function DashboardPage() {
     }
   }
 
+  function handleEditWorkspace(workspace) {
+    setEditingWorkspaceId(getWorkspaceId(workspace));
+    setWorkspaceForm({
+      name: workspace.name || "",
+      description: workspace.description || "",
+      visibility: workspace.visibility || "PRIVATE",
+      logoUrl: workspace.logoUrl || "https://placehold.co/120x120/png"
+    });
+    setWorkspaceModalOpen(true);
+  }
+
   async function createBoard(event) {
     event.preventDefault();
     try {
       const workspaceId = Number(boardForm.workspaceId);
-      const created = await boardApi.create({ workspaceId, name: boardForm.name, description: boardForm.description, visibility: boardForm.visibility, background: boardForm.background }, token, userId);
-      setBoardsByWorkspace((current) => ({ ...current, [workspaceId]: [created, ...(current[workspaceId] || [])] }));
-      setBoardModalState({ open: false, workspaceId: "" });
+      if (boardModalState.boardId) {
+        const updated = await boardApi.update(boardModalState.boardId, {
+          workspaceId,
+          name: boardForm.name,
+          description: boardForm.description,
+          visibility: boardForm.visibility,
+          background: boardForm.background
+        }, token, userId);
+        setBoardsByWorkspace((current) => ({
+          ...current,
+          [workspaceId]: (current[workspaceId] || []).map((item) =>
+            (item.boardId ?? item.id) === boardModalState.boardId ? updated : item
+          )
+        }));
+      } else {
+        const created = await boardApi.create({ workspaceId, name: boardForm.name, description: boardForm.description, visibility: boardForm.visibility, background: boardForm.background }, token, userId);
+        setBoardsByWorkspace((current) => ({ ...current, [workspaceId]: [created, ...(current[workspaceId] || [])] }));
+        navigate(`/app/board/${created.boardId ?? created.id}`);
+      }
+      setBoardModalState({ open: false, workspaceId: "", boardId: null });
       setBoardForm({ workspaceId: "", name: "", description: "", visibility: "PRIVATE", background: "#0ea5e9" });
-      navigate(`/app/board/${created.boardId ?? created.id}`);
     } catch (error) {
       setMessage(error.message);
     }
+  }
+
+  function handleEditBoard(board, workspaceId) {
+    setBoardModalState({ open: true, workspaceId, boardId: board.boardId ?? board.id });
+    setBoardForm({
+      workspaceId,
+      name: board.name || "",
+      description: board.description || "",
+      visibility: board.visibility || "PRIVATE",
+      background: board.background || "#0ea5e9"
+    });
   }
 
   async function markAllRead() {
@@ -418,6 +479,8 @@ export default function DashboardPage() {
           return;
         }
 
+        setEditingWorkspaceId(null);
+        setWorkspaceForm({ name: "", description: "", visibility: "PRIVATE", logoUrl: "https://placehold.co/120x120/png" });
         setWorkspaceModalOpen(true);
       }}>{workspaceActionLabel}</button>}
     >
@@ -440,6 +503,8 @@ export default function DashboardPage() {
                     return;
                   }
 
+                  setEditingWorkspaceId(null);
+                  setWorkspaceForm({ name: "", description: "", visibility: "PRIVATE", logoUrl: "https://placehold.co/120x120/png" });
                   setWorkspaceModalOpen(true);
                 }}
               >
@@ -532,9 +597,9 @@ export default function DashboardPage() {
             workspaces.map((workspace) => {
               const workspaceId = getWorkspaceId(workspace);
               return <WorkspaceCard key={workspaceId} workspace={workspace} boards={boardsByWorkspace[workspaceId] || []} onCreateBoard={(selectedWorkspaceId) => {
-                setBoardModalState({ open: true, workspaceId: selectedWorkspaceId });
+                setBoardModalState({ open: true, workspaceId: selectedWorkspaceId, boardId: null });
                 setBoardForm((current) => ({ ...current, workspaceId: selectedWorkspaceId }));
-              }} onDeleteWorkspace={handleDeleteWorkspace} onDeleteBoard={handleDeleteBoard} />;
+              }} onEditWorkspace={handleEditWorkspace} onEditBoard={handleEditBoard} onDeleteWorkspace={handleDeleteWorkspace} onDeleteBoard={handleDeleteBoard} />;
             })
           ) : (
             <section className="panel">
@@ -595,9 +660,12 @@ export default function DashboardPage() {
         <NotificationPanel notifications={notifications} onMarkAll={markAllRead} onNotificationClick={handleNotificationClick} />
       </div>
 
-      <Modal open={workspaceModalOpen} title="Create workspace" onClose={() => setWorkspaceModalOpen(false)}>
+      <Modal open={workspaceModalOpen} title={editingWorkspaceId ? "Edit workspace" : "Create workspace"} onClose={() => {
+        setWorkspaceModalOpen(false);
+        setEditingWorkspaceId(null);
+      }}>
         <form className="form-grid" onSubmit={createWorkspace}>
-          {showUpgradeControls ? (
+          {showUpgradeControls && !editingWorkspaceId ? (
             <>
               <p className="auth-note">Free plan is capped at 3 owned workspaces. Use upgrade to open Razorpay and unlock more workspaces.</p>
               <button
@@ -629,11 +697,13 @@ export default function DashboardPage() {
             Logo URL
             <input value={workspaceForm.logoUrl} onChange={(event) => setWorkspaceForm((current) => ({ ...current, logoUrl: event.target.value }))} />
           </label>
-          <button className="primary-button">{showUpgradeControls ? "Create after upgrade" : "Create workspace"}</button>
+          <button className="primary-button">
+            {editingWorkspaceId ? "Update workspace" : showUpgradeControls ? "Create after upgrade" : "Create workspace"}
+          </button>
         </form>
       </Modal>
 
-      <Modal open={boardModalState.open} title="Create board" onClose={() => setBoardModalState({ open: false, workspaceId: "" })}>
+      <Modal open={boardModalState.open} title={boardModalState.boardId ? "Edit board" : "Create board"} onClose={() => setBoardModalState({ open: false, workspaceId: "", boardId: null })}>
         <form className="form-grid" onSubmit={createBoard}>
           <label>
             Board name
@@ -654,7 +724,7 @@ export default function DashboardPage() {
             Accent color
             <input type="color" value={boardForm.background} onChange={(event) => setBoardForm((current) => ({ ...current, background: event.target.value }))} />
           </label>
-          <button className="primary-button">Create board</button>
+          <button className="primary-button">{boardModalState.boardId ? "Update board" : "Create board"}</button>
         </form>
       </Modal>
     </Shell>

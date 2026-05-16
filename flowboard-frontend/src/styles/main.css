@@ -962,11 +962,11 @@ textarea {
 
 .topbar h1 {
   margin: 0;
-  font-size: clamp(1.35rem, 2vw, 2rem);
-  line-height: 1.15;
-  letter-spacing: -0.045em;
-  max-width: 26ch;
-  font-weight: 700;
+  font-size: clamp(2.2rem, 4vw, 3.4rem);
+  line-height: 1.02;
+  letter-spacing: -0.06em;
+  max-width: 18ch;
+  font-weight: 800;
 }
 
 .topbar-copy {
@@ -1431,6 +1431,19 @@ textarea {
   font-size: 0.85rem;
 }
 
+.task-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.action-separator {
+  color: var(--muted);
+  line-height: 1;
+}
+
 .ghost-panel {
   background: var(--empty-bg);
   border: 1px dashed var(--border);
@@ -1530,6 +1543,56 @@ textarea {
   bottom: 0;
   width: 100%;
   margin-top: 0.25rem;
+}
+
+.timeline-attachments {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+}
+
+.timeline-content {
+  min-width: 0;
+}
+
+.timeline-attachment-item {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.timeline-attachments a {
+  color: var(--cyan);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+  word-break: break-word;
+}
+
+.timeline-image-preview {
+  display: block;
+  width: min(220px, 100%);
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 24px rgba(84, 67, 52, 0.12);
+}
+
+.timeline-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 0.7rem;
+}
+
+.timeline-edit-box {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.timeline-edit-box textarea {
+  min-height: 88px;
 }
 
 @media (max-width: 1100px) {

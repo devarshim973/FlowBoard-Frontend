@@ -28,10 +28,13 @@ export default function BoardColumn({ list, onCreateCard, onQuickStatus, onDragS
               <span className={`priority priority-${(card.priority || "LOW").toLowerCase()}`}>
                 {card.priority || "LOW"}
               </span>
-              <div>
+              <div className="task-card-actions">
                 <button className="link-button" onClick={() => onEditCard(card)}>Edit</button>
+                <span className="action-separator">,</span>
                 <button className="link-button" onClick={() => onDeleteCard(card)}>Delete</button>
+                <span className="action-separator">,</span>
                 <button className="link-button" onClick={() => onAddComment(card)}>Comment</button>
+                <span className="action-separator">,</span>
                 <button className="link-button" onClick={() => onQuickStatus(card)}>
                   Next status
                 </button>
