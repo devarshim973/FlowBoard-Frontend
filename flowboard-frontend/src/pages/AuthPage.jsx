@@ -25,6 +25,7 @@ const initialForgotPassword = {
 const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[#@$!%*?&])[A-Za-z\d@$#!%*?&]{8,}$/;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const THEME_STORAGE_KEY = "flowboard-theme";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 function formatAuthError(message) {
   if (!message) {
@@ -125,7 +126,7 @@ export default function AuthPage({ adminMode = false }) {
   }
 
   function handleGoogleLogin() {
-    window.location.href = "/oauth2/authorization/google";
+    window.location.href = `${API_BASE_URL}/oauth2/authorization/google`;
   }
 
   function validateLoginForm() {
