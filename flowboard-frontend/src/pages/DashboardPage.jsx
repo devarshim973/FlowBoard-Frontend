@@ -10,6 +10,11 @@ import { formatDate, getBoardId, getWorkspaceId, unwrapItems } from "../services
 import { useAuth } from "../state/AuthContext";
 
 const DISMISSED_DUE_REMINDERS_KEY = "flowboard-dismissed-due-reminders";
+const WORKSPACE_LIMITS = {
+  free: 3,
+  paid: 10,
+  paidUnlimited: false
+};
 
 function startOfDay(date) {
   const next = new Date(date);
@@ -96,7 +101,6 @@ function mergeNotifications(baseNotifications, reminders) {
 }
 
 export default function DashboardPage() {
-  const FREE_WORKSPACE_LIMIT = 3;
   const { token, userId } = useAuth();
   const [workspaces, setWorkspaces] = useState([]);
   const [boardsByWorkspace, setBoardsByWorkspace] = useState({});
@@ -114,10 +118,13 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const fallbackOwnedWorkspaceCount = workspaces.length;
   const activeSubscription = subscriptionStatus?.active === true;
+  const workspaceLimit = activeSubscription
+    ? (WORKSPACE_LIMITS.paidUnlimited ? Infinity : WORKSPACE_LIMITS.paid)
+    : WORKSPACE_LIMITS.free;
   const countedOwnedWorkspaces = workspaces.filter((workspace) => String(workspace.ownerId ?? "") === String(userId)).length;
   const ownedWorkspaceCount = countedOwnedWorkspaces > 0 ? countedOwnedWorkspaces : fallbackOwnedWorkspaceCount;
   const limitMessageShown = message.includes("Workspace limit reached") || message.includes("Payment service not available");
-  const showUpgradeControls = !activeSubscription && (upgradeRequired || limitMessageShown || ownedWorkspaceCount >= FREE_WORKSPACE_LIMIT);
+  const showUpgradeControls = !activeSubscription && (upgradeRequired || limitMessageShown || ownedWorkspaceCount >= WORKSPACE_LIMITS.free);
   const requiresWorkspaceUpgrade = showUpgradeControls;
   const workspaceActionLabel = paymentLoading
     ? "Opening checkout..."
@@ -526,7 +533,7 @@ export default function DashboardPage() {
             <article className="hero-mini-card hero-mini-card-plan">
               <span className="hero-mini-label">Plan</span>
               <strong>{activeSubscription ? "Premium Active" : "Free Plan"}</strong>
-              <p>{activeSubscription ? "Unlimited workspace creation unlocked." : `${ownedWorkspaceCount}/${FREE_WORKSPACE_LIMIT} owned workspace slots used.`}</p>
+              <p>{activeSubscription ? (WORKSPACE_LIMITS.paidUnlimited ? "Unlimited workspace creation unlocked." : `Premium users can create up to ${workspaceLimit} workspaces.`) : `${ownedWorkspaceCount}/${WORKSPACE_LIMITS.free} owned workspace slots used.`}</p>
             </article>
           </aside>
         </section>
@@ -534,7 +541,7 @@ export default function DashboardPage() {
         <section className="metrics-grid dashboard-metrics">
           <MetricCard title="Workspaces" value={workspaces.length} hint="Personal and team spaces" delay={80} />
           <MetricCard title="Boards" value={Object.values(boardsByWorkspace).flat().length} hint="Across all active workspaces" tone="green" delay={160} />
-          <MetricCard title="Plan" value={activeSubscription ? "Premium" : "Free"} hint={activeSubscription ? "Unlimited workspaces unlocked" : `${ownedWorkspaceCount}/${FREE_WORKSPACE_LIMIT} owned workspaces used`} delay={240} />
+          <MetricCard title="Plan" value={activeSubscription ? "Premium" : "Free"} hint={activeSubscription ? (WORKSPACE_LIMITS.paidUnlimited ? "Unlimited workspaces unlocked" : `${Math.min(ownedWorkspaceCount, workspaceLimit)}/${workspaceLimit} premium workspaces used`) : `${ownedWorkspaceCount}/${WORKSPACE_LIMITS.free} owned workspaces used`} delay={240} />
         </section>
       </div>
 
@@ -551,7 +558,7 @@ export default function DashboardPage() {
         >
           <div>
             <p className="eyebrow">Upgrade Required</p>
-            <h3 style={{ margin: 0 }}>Create more than 3 workspaces with Premium</h3>
+            <h3 style={{ margin: 0 }}>{WORKSPACE_LIMITS.paidUnlimited ? "Create unlimited workspaces with Premium" : `Create up to ${WORKSPACE_LIMITS.paid} workspaces with Premium`}</h3>
             <p style={{ margin: "8px 0 0 0" }}>Click the button to open Razorpay payment and unlock more workspace creation.</p>
           </div>
           <button
@@ -667,7 +674,7 @@ export default function DashboardPage() {
         <form className="form-grid" onSubmit={createWorkspace}>
           {showUpgradeControls && !editingWorkspaceId ? (
             <>
-              <p className="auth-note">Free plan is capped at 3 owned workspaces. Use upgrade to open Razorpay and unlock more workspaces.</p>
+              <p className="auth-note">Free plan is capped at {WORKSPACE_LIMITS.free} owned workspaces. Use upgrade to open Razorpay and unlock more workspaces.</p>
               <button
                 type="button"
                 className="primary-button"
